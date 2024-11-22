@@ -289,7 +289,7 @@ template <std::size_t _PointerSize> struct _MemoryBlock
 
 using _MemoryBlock_t = detail::_MemoryBlock<__SIZEOF_POINTER__>;
 
-int memory_init(uint8_t *__start, size_t __size_in_bytes) noexcept;
+int mem_init(uint8_t *__start, size_t __size_in_bytes) noexcept;
 void* mem_malloc(size_t __size) noexcept;
 void* mem_calloc(size_t __num, size_t __size) noexcept;
 void* mem_realloc(void *__p, size_t __new_sz) noexcept;

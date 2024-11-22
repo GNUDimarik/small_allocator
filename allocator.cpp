@@ -22,7 +22,7 @@ static void __try_merge_free_blocks()
     }
 }
 
-int memory_init(uint8_t *__start, size_t __size_in_bytes) noexcept
+int mem_init(uint8_t *__start, size_t __size_in_bytes) noexcept
 {
     if (__start != nullptr && __size_in_bytes > 0)
     {
@@ -34,18 +34,18 @@ int memory_init(uint8_t *__start, size_t __size_in_bytes) noexcept
 
         // Set to heap end pointer to usable space of the last block
         // Mark it as allocated block with size __SIZEOF_POINTER__
-        _MemoryBlock_t heapStart(detail::_S_heap_start);
-        heapStart.__put_to_header(_MemoryBlock_t::_S_header_size, _MemoryBlock_t::_BlockState::_S_allocated);
+        _MemoryBlock_t __heap_start(detail::_S_heap_start);
+        __heap_start.__put_to_header(_MemoryBlock_t::_S_header_size, _MemoryBlock_t::_BlockState::_S_allocated);
 
-        _MemoryBlock_t heap = heapStart.__next_implicit_block();
+        _MemoryBlock_t heap = __heap_start.__next_implicit_block();
         // Take in account overhead for heap memory block it self so formula is
         // total heap size  - reserved space - heap memory block overhead size
         heap.__put_to_header(__size_in_bytes - __total_reserved_space - _MemoryBlock_t::_S_header_size,
                              _MemoryBlock_t::_BlockState::_S_free);
 
         // Create the last allocated service block
-        _MemoryBlock_t heapEnd = heap.__next_implicit_block();
-        heapEnd.__put_to_header(_MemoryBlock_t::_S_header_size, _MemoryBlock_t::_BlockState::_S_allocated);
+        _MemoryBlock_t __heap_end = heap.__next_implicit_block();
+        __heap_end.__put_to_header(_MemoryBlock_t::_S_header_size, _MemoryBlock_t::_BlockState::_S_allocated);
         return 0;
     }
 
