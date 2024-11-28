@@ -154,7 +154,7 @@ TEST(AllocatorTest, mem_realloc_test) {
     ASSERT_STREQ(p0, str);
 
     old_ptr = p0;
-    p0 = memory_realloc(p0, 100);
+    p0 = memory_realloc(p0, 30);
     ASSERT_EQ(old_ptr, p0);
     ASSERT_STREQ(p0, str);
 
