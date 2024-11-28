@@ -88,7 +88,7 @@ template <std::size_t _PointerSize> struct _MemoryBlock
     _MemoryBlock(uint8_t* __addr) : _M_block(__addr)
     {
         if (_M_block) {
-            _M_prev_blk_size = reinterpret_cast<size_t*>(_M_block - sizeof(size_t));
+            _M_prev_blk_size = reinterpret_cast<size_t*>(_M_block - _S_header_size);
         }
     }
 
@@ -173,6 +173,10 @@ template <std::size_t _PointerSize> struct _MemoryBlock
         *reinterpret_cast<size_t*>(__header()) = __size | static_cast<int>(__state);
     }
 
+    /**
+     * @brief __put_prev_blk_size
+     * @param __prev_blk_size returns previous implicit block
+     */
     void __put_prev_blk_size(size_t __prev_blk_size) noexcept {
         *reinterpret_cast<size_t*>(__header() - _S_header_size) = __prev_blk_size;
     }
@@ -183,7 +187,7 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      */
     _MemoryBlock __next_implicit_block() const noexcept
     {
-        return _MemoryBlock(__header() + __size() + sizeof(size_t) + _S_header_size);
+        return _MemoryBlock(__header() + __size() + _S_total_overhead_size);
     }
 
     /**
@@ -192,7 +196,7 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      */
     _MemoryBlock __prev_implicit_block() const noexcept
     {
-        return _MemoryBlock(__header() - *_M_prev_blk_size - sizeof(size_t) - _S_header_size);
+        return _MemoryBlock(__header() - *_M_prev_blk_size - _S_total_overhead_size);
     }
 
     /**

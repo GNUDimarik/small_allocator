@@ -45,7 +45,5 @@ int main()
     }
 
     utils::alloc_malloc::__dump();
-
-    memory_alloc(50000);
     return 0;
 }
