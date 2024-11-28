@@ -241,31 +241,28 @@ template <std::size_t _PointerSize> struct _MemoryBlock
 
     _MemoryBlock __try_consolidate() noexcept {
         auto __res = *this;
+        auto __blk = __next_implicit_block();
+        _MemoryBlock __b = _MemoryBlock::__null_block();
 
-        if (__is_free()) {
-            auto __blk = __next_implicit_block();
-            _MemoryBlock __b = _MemoryBlock::__null_block();
+        if (!__blk.__is_null() && __blk.__is_free())
+        {
+            __put_to_header(__size() + __blk.__size_with_overhead());
+            __b = __next_implicit_block();
 
-            if (!__blk.__is_null() && __blk.__is_free())
-            {
-                __put_to_header(__size() + __blk.__size_with_overhead());
-                __b = __next_implicit_block();
-
-                if (!__b.__is_null()) {
-                    __b.__put_prev_blk_size(__size());
-                }
+            if (!__b.__is_null()) {
+                __b.__put_prev_blk_size(__size());
             }
+        }
 
-            __blk = __res.__prev_implicit_block();
+        __blk = __res.__prev_implicit_block();
 
-            if (!__blk.__is_null() && __blk.__is_free())
-            {
-                __blk.__put_to_header(__size() + __blk.__size_with_overhead());
-                __b = __blk.__next_implicit_block();
+        if (!__blk.__is_null() && __blk.__is_free())
+        {
+            __blk.__put_to_header(__size() + __blk.__size_with_overhead());
+            __b = __blk.__next_implicit_block();
 
-                if (!__b.__is_null()) {
-                    __b.__put_prev_blk_size(__blk.__size());
-                }
+            if (!__b.__is_null()) {
+                __b.__put_prev_blk_size(__blk.__size());
             }
         }
 

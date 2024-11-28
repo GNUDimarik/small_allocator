@@ -125,21 +125,32 @@ TEST(AllocatorTest, mem_free_test) {
 }
 
 TEST(AllocatorTest, mem_realloc_test) {
-#if 0
+
     char* p0 = memory_alloc(100);
     char* p1 = memory_alloc(200);
     char* p2 = memory_alloc(100);
+    const char* str = "Hello world!";
 
-    printf("p0 %p\n", p0);
-    printf("p1 %p\n", p1);
-    printf("p2 %p\n", p2);
+    memory_free(p2);
+    strcpy(p1, str);
+    char* old_ptr = p1;
+    p1 = memory_realloc(p1, 220);
+    ASSERT_EQ(p1, old_ptr);
+    ASSERT_STREQ(p1, str);
+
+    old_ptr = p0;
+    strcpy(p0, str);
+    p0 = memory_realloc(p0, 300);
+    ASSERT_NE(old_ptr, p0);
+    ASSERT_TRUE(p0 > old_ptr);
+    ASSERT_STREQ(p0, str);
+
+    p0 = memory_realloc(p0, 100);
+    ASSERT_TRUE(old_ptr < p0);
+    ASSERT_STREQ(p0, str);
+
+    memory_free(p0);
     memory_free(p1);
-    //memory_free(p0);
-    p0 = memory_realloc(p0, 120);
-
-    printf("p2 realloc %p\n", p2);
-    utils::alloc_malloc::__dump();
-#endif
 }
 
 TEST(AllocatorTest, mem_calloc_test) {
