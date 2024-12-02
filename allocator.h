@@ -15,8 +15,12 @@ namespace alloc_malloc
 namespace detail
 {
 
-static uint8_t* _S_heap_start = nullptr;
-static uint8_t* _S_heap_end = nullptr;
+template <std::size_t _PointerSize> struct _MemoryBlock;
+using _MemoryBlock_t = detail::_MemoryBlock<__SIZEOF_POINTER__>;
+
+static _MemoryBlock_t* _S_heap_start = nullptr;
+static _MemoryBlock_t* _S_heap_end = nullptr;
+static _MemoryBlock_t *_S_free_head = nullptr;
 
 template <std::size_t _PointerSize> struct _MemoryBlock
 {
@@ -74,22 +78,33 @@ template <std::size_t _PointerSize> struct _MemoryBlock
     /**
      * @brief _M_prev_blk_size size of previous block
      */
-    size_t* _M_prev_blk_size = nullptr;
+    size_t _M_prev_blk_size = 0;
 
     /**
-     * @brief _M_block pointer to memory block which starts from implicit header
+     * @brief _M_size
      */
-    uint8_t* _M_block = nullptr;
+    size_t _M_size = 0;
 
     /**
      * @brief _MemoryBlock creates _MemoryBlock from __addr. It's header address not user space
      * @param __addr start of block
      */
-    _MemoryBlock(uint8_t* __addr) : _M_block(__addr)
+    _MemoryBlock(uint8_t* __addr) noexcept
     {
-        if (_M_block) {
-            _M_prev_blk_size = reinterpret_cast<size_t*>(_M_block - _S_header_size);
+        _M_size = reinterpret_cast<size_t>(__addr);
+
+        if (_M_size > 0) {
+            _M_prev_blk_size = *reinterpret_cast<size_t*>(__header() - _S_header_size);
         }
+    }
+
+    /**
+     * @brief __construct _MemoryBlock object on the __address
+     * @param __address where object to be contstructed to
+     * @return
+     */
+    inline static _MemoryBlock* __construct(void* __address) noexcept {
+        return reinterpret_cast<_MemoryBlock*> (__address);
     }
 
     /**
@@ -98,13 +113,13 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      * space. i.e. after implicit header
      * @return
      */
-    inline static _MemoryBlock __from_user_space_memory(void* __address)
+    inline static _MemoryBlock* __from_user_space_memory(void* __address)
     {
         if (__address != nullptr) {
-            return _MemoryBlock(reinterpret_cast<uint8_t*> (__address) - _S_header_size);
+            return __construct(reinterpret_cast<uint8_t*> (__address) - _S_total_overhead_size);
         }
 
-        return __null_block();
+        return nullptr;
     }
 
     /**
@@ -113,7 +128,13 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      */
     inline uint8_t* __header() const noexcept
     {
-        return _M_block;
+        size_t* __p = const_cast<size_t*>(&_M_size);
+        return reinterpret_cast<uint8_t*>(__p);
+    }
+
+    inline uint8_t* __begin() const noexcept {
+        size_t* __p = const_cast<size_t*>(&_M_prev_blk_size);
+        return reinterpret_cast<uint8_t*>(__p);
     }
 
     /**
@@ -132,7 +153,7 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      */
     inline size_t __size() const noexcept
     {
-        return (*reinterpret_cast<size_t*>(__header()) & ~0x01);
+        return _M_size & ~0x01;
     }
 
     /**
@@ -150,8 +171,7 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      */
     inline bool __is_allocated() const noexcept
     {
-        return (*reinterpret_cast<size_t*>(__header()) & 0x01) ==
-               static_cast<int>(_BlockState::_S_allocated);
+        return (_M_size  & 0x01) == static_cast<int>(_BlockState::_S_allocated);
     }
 
     /**
@@ -170,33 +190,24 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      */
     void __put_to_header(size_t __size, _BlockState __state = _BlockState::_S_free) noexcept
     {
-        *reinterpret_cast<size_t*>(__header()) = __size | static_cast<int>(__state);
-    }
-
-    /**
-     * @brief __put_prev_blk_size
-     * @param __prev_blk_size returns previous implicit block
-     */
-    void __put_prev_blk_size(size_t __prev_blk_size) noexcept {
-        *reinterpret_cast<size_t*>(__header() - _S_header_size) = __prev_blk_size;
+        _M_size = __size | static_cast<int>(__state);
     }
 
     /**
      * @brief __next_implicit_block
      * @return next implicit block
      */
-    _MemoryBlock __next_implicit_block() const noexcept
+    _MemoryBlock* __next_implicit() const noexcept
     {
-        return _MemoryBlock(__header() + __size() + _S_total_overhead_size);
+        return __construct(__begin() + __size_with_overhead());
     }
 
     /**
      * @brief previousImplicitBlock
      * @return previous implicit block
      */
-    _MemoryBlock __prev_implicit_block() const noexcept
-    {
-        return _MemoryBlock(__header() - *_M_prev_blk_size - _S_total_overhead_size);
+    _MemoryBlock* __prev_implicit() const noexcept {
+        return __construct(__begin() - (_M_prev_blk_size + _S_total_overhead_size));
     }
 
     /**
@@ -207,8 +218,10 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      * slicing happens from end of the block.
      * if this block had no enough space for that null block is returned @see __is_null
      */
-    _MemoryBlock __slice(size_t __sz) noexcept
+    _MemoryBlock* __slice(size_t __sz) noexcept
     {
+        // Should not be called without successfull __find_best_fit
+        // will crash otherwise
         if (__sz > 0)
         {
             __sz = __aligned_size(__sz);
@@ -217,15 +230,15 @@ template <std::size_t _PointerSize> struct _MemoryBlock
             {
                 size_t __new_sz = __size() - __sz;
                 __put_to_header(__sz, _BlockState::_S_allocated);
-                auto __n = __next_implicit_block();
-                __n.__put_to_header(__new_sz - _S_total_overhead_size, _BlockState::_S_free);
-                __n.__put_prev_blk_size(__size());
-                return *this;
+                auto __n = __next_implicit();
+                __n->__put_to_header(__new_sz - _S_total_overhead_size, _BlockState::_S_free);
+                __n->_M_prev_blk_size = __size();
+                return this;
             }
             else if (__sz == __size())
             {
                 __put_to_header(__sz, _BlockState::_S_allocated);
-                return *this;
+                return this;
             }
             else
             {
@@ -236,33 +249,37 @@ template <std::size_t _PointerSize> struct _MemoryBlock
             }
         }
 
-        return __null_block();
+        return nullptr;
     }
 
-    _MemoryBlock __try_consolidate() noexcept {
-        auto __res = *this;
-        auto __blk = __next_implicit_block();
-        _MemoryBlock __b = _MemoryBlock::__null_block();
+    /**
+     * @brief __try_consolidate tries to merge contiguous blocks
+     * @return
+     */
+    _MemoryBlock* __try_consolidate() noexcept {
+        auto __res = this;
+        auto __blk = __next_implicit();
+        _MemoryBlock* __b = nullptr;
 
-        if (!__blk.__is_null() && __blk.__is_free())
+        if (__blk&& __blk->__is_free())
         {
-            __put_to_header(__size() + __blk.__size_with_overhead());
-            __b = __next_implicit_block();
+            __put_to_header(__size() + __blk->__size_with_overhead());
+            __b = __next_implicit();
 
-            if (!__b.__is_null()) {
-                __b.__put_prev_blk_size(__size());
+            if (__b) {
+                __b->_M_prev_blk_size = __size();
             }
         }
 
-        __blk = __res.__prev_implicit_block();
+        __blk = __res->__prev_implicit();
 
-        if (!__blk.__is_null() && __blk.__is_free())
+        if (__blk && __blk->__is_free())
         {
-            __blk.__put_to_header(__size() + __blk.__size_with_overhead());
-            __b = __blk.__next_implicit_block();
+            __blk->__put_to_header(__size() + __blk->__size_with_overhead());
+            __b = __blk->__next_implicit();
 
-            if (!__b.__is_null()) {
-                __b.__put_prev_blk_size(__blk.__size());
+            if (__b) {
+                __b->_M_prev_blk_size = __blk->__size();
             }
         }
 
@@ -278,12 +295,19 @@ template <std::size_t _PointerSize> struct _MemoryBlock
     }
 
     /**
+     * @brief __allocate sets allocatd state to header
+     */
+    inline void __allocate() noexcept {
+        __put_to_header(__size(), _BlockState::_S_allocated);
+    }
+
+    /**
      * @brief __is_null
      * @return true if block points to nullptr
      */
     bool __is_null() const noexcept
     {
-        return _M_block == nullptr;
+        return __header() == nullptr;
     }
 
     /**
@@ -291,7 +315,7 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      * @return true if block header points to heap start or heap end
      */
     bool __is_service() const noexcept {
-        return _M_block == _S_heap_start || _M_block == _S_heap_end;
+        return this == _S_heap_start || this == _S_heap_end;
     }
 
     /**
@@ -306,22 +330,22 @@ template <std::size_t _PointerSize> struct _MemoryBlock
 
     void __dump() const noexcept
     {
-        const char* format = _M_block == _S_heap_start || _M_block == _S_heap_end
+        const char* format = __is_service()
                              ? "service block address %p size %12lu \t size "
                              "with overhead %8lu state %s"
                              : "block address         %p size %12lu \t size "
                              "with overhead %8lu state %s\tprev blk size %lu";
 
         ALOGD(format, __user_space_memory(), __size(), __size_with_overhead(),
-              __is_allocated() ? "allocated" : "free", *_M_prev_blk_size);
+              __is_allocated() ? "allocated" : "free", _M_prev_blk_size);
     }
 };
 
 }  // namespace details
 
-using _MemoryBlock_t = detail::_MemoryBlock<__SIZEOF_POINTER__>;
+using detail::_MemoryBlock_t;
 
-int mem_init(uint8_t *__start, size_t __size_in_bytes) noexcept;
+int mem_init(void *__start, size_t __size_in_bytes) noexcept;
 void* mem_malloc(size_t __size) noexcept;
 void* mem_calloc(size_t __num, size_t __size) noexcept;
 void* mem_realloc(void *__p, size_t __new_sz) noexcept;

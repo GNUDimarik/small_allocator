@@ -7,32 +7,24 @@ namespace utils
 namespace alloc_malloc
 {
 
-int mem_init(uint8_t *__start, size_t __size_in_bytes) noexcept
+int mem_init(void *__start, size_t __size_in_bytes) noexcept
 {
     if (__start != nullptr && __size_in_bytes > 0)
     {
         // first and last blocks must be always allocated
+        detail::_S_heap_start = _MemoryBlock_t::__construct(__start); // take in account size of prev block
+        detail::_S_heap_start->__put_to_header(_MemoryBlock_t::_S_total_overhead_size);
+        detail::_S_heap_start->__allocate();
+
         size_t __reserved_block_size = _MemoryBlock_t::_S_total_overhead_size << 1;
-        size_t __total_reserved_space = __reserved_block_size << 1;
-        detail::_S_heap_start = __start + sizeof (size_t); // take in account size of prev block
-        detail::_S_heap_end = detail::_S_heap_start + __size_in_bytes - __reserved_block_size;
+        auto __heap = detail::_S_heap_start->__next_implicit();
+        __heap->__put_to_header(__size_in_bytes - (__reserved_block_size << 1) - _MemoryBlock_t::_S_total_overhead_size);
+        __heap->_M_prev_blk_size = detail::_S_heap_start->__size();
 
-        // Set to heap end pointer to usable space of the last block
-        // Mark it as allocated block with size __SIZEOF_POINTER__
-        _MemoryBlock_t __heap_start(detail::_S_heap_start);
-        __heap_start.__put_to_header(_MemoryBlock_t::_S_total_overhead_size, _MemoryBlock_t::_BlockState::_S_allocated);
-
-        _MemoryBlock_t __heap = __heap_start.__next_implicit_block();
-        // Take in account overhead for heap memory block it self so formula is
-        // total heap size  - reserved space - heap memory block overhead size
-        __heap.__put_to_header(__size_in_bytes - __total_reserved_space - _MemoryBlock_t::_S_total_overhead_size,
-                               _MemoryBlock_t::_BlockState::_S_free);
-        __heap.__put_prev_blk_size(_MemoryBlock_t::_S_total_overhead_size);
-
-        // Create the last allocated service block
-        _MemoryBlock_t __heap_end = __heap.__next_implicit_block();
-        __heap_end.__put_to_header(_MemoryBlock_t::_S_total_overhead_size, _MemoryBlock_t::_BlockState::_S_allocated);
-        __heap_end.__put_prev_blk_size(__heap.__size());
+        detail::_S_heap_end = __heap->__next_implicit();
+        detail::_S_heap_end->__put_to_header(_MemoryBlock_t::_S_total_overhead_size);
+        detail::_S_heap_end->_M_prev_blk_size = __heap->__size();
+        detail::_S_heap_end->__allocate();
         return 0;
     }
 
@@ -44,21 +36,21 @@ int mem_init(uint8_t *__start, size_t __size_in_bytes) noexcept
  * @param __size
  * @return
  */
-_MemoryBlock_t __mem_find_fist_fit(size_t __size)
+_MemoryBlock_t* __mem_find_fist_fit(size_t __size)
 {
     if (detail::_S_heap_start != nullptr && detail::_S_heap_end != nullptr)
     {
-        for (_MemoryBlock_t __cur_blk = detail::_S_heap_start; __cur_blk.__header() <= detail::_S_heap_end;
-                __cur_blk = __cur_blk.__next_implicit_block())
+        for (auto __cur_blk = detail::_S_heap_start; __cur_blk != detail::_S_heap_end->__next_implicit();
+                __cur_blk = __cur_blk->__next_implicit())
         {
-            if (__cur_blk.__is_free() && __cur_blk.__size() >= __size)
+            if (__cur_blk->__is_free() && __cur_blk->__size() >= __size)
             {
                 return __cur_blk;
             }
         }
     }
 
-    return _MemoryBlock_t::__null_block();
+    return nullptr;
 }
 
 /**
@@ -76,11 +68,11 @@ void* mem_malloc(size_t __size) noexcept
 {
     if (__size > 0)
     {
-        auto block = __mem_find_fist_fit(_MemoryBlock_t::__aligned_size(__size));
+        auto __fit = __mem_find_fist_fit(_MemoryBlock_t::__aligned_size(__size));
 
-        if (!block.__is_null())
+        if (__fit)
         {
-            return block.__slice(__size).__user_space_memory();
+            return __fit->__slice(__size)->__user_space_memory();
         }
 
         ALOGE("Out of memory");
@@ -126,43 +118,43 @@ void* mem_realloc(void *__p, size_t __new_sz) noexcept
         return mem_malloc(__new_sz);
     }
 
-    _MemoryBlock_t __blk = _MemoryBlock_t::__from_user_space_memory(__p);
+    auto __blk = _MemoryBlock_t::__from_user_space_memory(__p);
 
-    if (__blk.__is_allocated())
+    if (__blk && __blk->__is_allocated())
     {
         if (__new_sz > 0)
         {
-            if (__blk.__size() == __new_sz)
+            if (__blk->__size() == __new_sz)
             {
                 ALOGD("new block size exactly as needed!");
                 return __p;
             }
 
-            if (__new_sz > __blk.__size())
+            if (__new_sz > __blk->__size())
             {
                 ALOGD("new size is more than current. Trying to consalidate ...");
-                __blk.__try_consolidate();
+                __blk->__try_consolidate();
             }
 
-            if (__blk.__size() >= __new_sz)
+            if (__blk->__size() >= __new_sz)
             {
                 ALOGD("new block size more than needed, slicing ...");
-                auto __b = __blk.__slice(__new_sz);
+                auto __b = __blk->__slice(__new_sz);
 
                 // Check. Aligned size may be more than possible to slice
-                if (!__b.__is_null()) {
-                    return __b.__user_space_memory();
+                if (__b) {
+                    return __b->__user_space_memory();
                 }
             }
 
             // Here new block needs to be allocated and previous block needs to be copied to
             void* __new_blk = mem_malloc(__new_sz);
 
-            if (__new_blk != nullptr)
+            if (__new_blk)
             {
                 ALOGD("Trying to allocate new block and copy contents of old one there");
-                memcpy(__new_blk, __blk.__user_space_memory(), __blk.__size());
-                mem_free(__blk.__user_space_memory());
+                memcpy(__new_blk, __blk->__user_space_memory(), __blk->__size());
+                mem_free(__blk->__user_space_memory());
                 return __new_blk;
             }
 
@@ -189,9 +181,9 @@ void mem_free(void* __p) noexcept
     {
         auto __blk = _MemoryBlock_t::__from_user_space_memory(__p);
 
-        if (!__blk.__is_null() && __blk.__is_allocated()) {
-            __blk.__unallocate();
-            __blk.__try_consolidate();
+        if (__blk && __blk->__is_allocated()) {
+            __blk->__unallocate();
+            __blk->__try_consolidate();
         }
     } else {
         ALOGE("Unknown block '%p'", __p);
@@ -209,26 +201,24 @@ void __dump() noexcept
     size_t __total_allocated_memory = 0;
     size_t __total_with_overhead = 0;
     size_t __total_blocks = 0;
-
     ALOGD(
         "*************************MEMORY DUMP*************************");
-
     if (detail::_S_heap_start != nullptr && detail::_S_heap_end != nullptr)
     {
-        for (_MemoryBlock_t __cur_blk = detail::_S_heap_start; __cur_blk.__header() <= detail::_S_heap_end;
-                __cur_blk = __cur_blk.__next_implicit_block(), __total_blocks++)
+        for (auto __cur_blk = detail::_S_heap_start; __cur_blk != detail::_S_heap_end->__next_implicit();
+                __cur_blk = __cur_blk->__next_implicit(), __total_blocks++)
         {
-            __cur_blk.__dump();
-            __total_memory += __cur_blk.__size();
-            __total_with_overhead += __cur_blk.__size_with_overhead();
+            __cur_blk->__dump();
+            __total_memory += __cur_blk->__size();
+            __total_with_overhead += __cur_blk->__size_with_overhead();
 
-            if (__cur_blk.__is_allocated())
+            if (__cur_blk->__is_allocated())
             {
-                __total_allocated_memory += __cur_blk.__size();
+                __total_allocated_memory += __cur_blk->__size();
             }
-            else if (__cur_blk.__is_free())
+            else if (__cur_blk->__is_free())
             {
-                __total_free_memory += __cur_blk.__size();
+                __total_free_memory += __cur_blk->__size();
             }
         }
     }
@@ -238,13 +228,16 @@ void __dump() noexcept
     }
 
     ALOGD(
-        "**********************END OF MEMORY DUMP**********************");
+        "**************************MEMORY INFO**************************");
 
     ALOGD("total memory               %12lu bytes", __total_memory);
     ALOGD("total memory with overhead %12lu bytes", __total_with_overhead);
     ALOGD("total allocated memory     %12lu bytes", __total_allocated_memory);
     ALOGD("total free memory          %12lu bytes", __total_free_memory);
     ALOGD("total total_blocks count   %12lu", __total_blocks);
+
+    ALOGD(
+        "**********************END OF MEMORY DUMP**********************");
 }
 
 } // namespace alloc_malloc

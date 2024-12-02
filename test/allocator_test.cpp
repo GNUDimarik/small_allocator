@@ -38,7 +38,7 @@ TEST(AllocatorTest, merge_test) {
     pointers.reserve(MEM_ALLOC_ARRAY_LEN);
 
     char* p = nullptr;
-    _MemoryBlock_t block =  _MemoryBlock_t::__from_user_space_memory(p);
+    _MemoryBlock_t* block =  _MemoryBlock_t::__from_user_space_memory(p);
     size_t expected_block_size = _MemoryBlock_t::_S_total_overhead_size;
     size_t prev_blk_size = _MemoryBlock_t::_S_total_overhead_size;
 
@@ -46,50 +46,50 @@ TEST(AllocatorTest, merge_test) {
         p = memory_alloc(i);
         pointers[i] = p;
         block =  _MemoryBlock_t::__from_user_space_memory(p);
-        ASSERT_EQ(block.__is_allocated(), true);
-        ASSERT_EQ(block.__is_free(), false);
-        ASSERT_EQ(block.__size(), expected_block_size);
-        ASSERT_EQ(block.__size_with_overhead(), _MemoryBlock_t::_S_total_overhead_size + block.__size());
-        ASSERT_EQ(*block._M_prev_blk_size, prev_blk_size);
+        ASSERT_EQ(block->__is_allocated(), true);
+        ASSERT_EQ(block->__is_free(), false);
+        ASSERT_EQ(block->__size(), expected_block_size);
+        ASSERT_EQ(block->__size_with_overhead(), _MemoryBlock_t::_S_total_overhead_size + block->__size());
+        ASSERT_EQ(block->_M_prev_blk_size, prev_blk_size);
     }
 
     auto first =  _MemoryBlock_t::__from_user_space_memory(pointers[1]);
 
     for (int i = 1; i < 8; i++) {
         block =  _MemoryBlock_t::__from_user_space_memory(pointers[i]);
-        expected_block_size = block.__size();
+        expected_block_size = block->__size();
 
-        auto __n = block.__next_implicit_block();
+        auto __n = block->__next_implicit();
 
-        if (!__n.__is_null() && __n.__is_free()) {
-            expected_block_size += __n.__size_with_overhead();
+        if (__n && __n->__is_free()) {
+            expected_block_size += __n->__size_with_overhead();
         }
 
         memory_free(pointers[i]);
-        ASSERT_EQ(block.__is_allocated(), false);
-        ASSERT_EQ(block.__is_free(), true);
-        ASSERT_EQ(block.__size(), expected_block_size);
-        ASSERT_EQ(block.__size_with_overhead(), _MemoryBlock_t::_S_total_overhead_size + block.__size());
-        ASSERT_EQ(*block._M_prev_blk_size, prev_blk_size);
+        ASSERT_EQ(block->__is_allocated(), false);
+        ASSERT_EQ(block->__is_free(), true);
+        ASSERT_EQ(block->__size(), expected_block_size);
+        ASSERT_EQ(block->__size_with_overhead(), _MemoryBlock_t::_S_total_overhead_size + block->__size());
+        ASSERT_EQ(block->_M_prev_blk_size, prev_blk_size);
 
         if (i > 1) {
-            prev_blk_size += block.__size_with_overhead();
+            prev_blk_size += block->__size_with_overhead();
         }
     }
 
-    ASSERT_EQ(first.__is_allocated(), false);
-    ASSERT_EQ(first.__is_free(), true);
-    ASSERT_EQ(first.__size(), HEAP_SIZE - (_MemoryBlock_t::_S_total_overhead_size * 5));
-    ASSERT_EQ(first.__size_with_overhead(), HEAP_SIZE - (_MemoryBlock_t::_S_total_overhead_size * 4));
-    ASSERT_EQ(*first._M_prev_blk_size, _MemoryBlock_t::_S_total_overhead_size);
+    ASSERT_EQ(first->__is_allocated(), false);
+    ASSERT_EQ(first->__is_free(), true);
+    ASSERT_EQ(first->__size(), HEAP_SIZE - (_MemoryBlock_t::_S_total_overhead_size * 5));
+    ASSERT_EQ(first->__size_with_overhead(), HEAP_SIZE - (_MemoryBlock_t::_S_total_overhead_size * 4));
+    ASSERT_EQ(first->_M_prev_blk_size, _MemoryBlock_t::_S_total_overhead_size);
 }
 
 TEST(AllocatorTest, mem_malloc_test) {
     char* p = memory_alloc(0);
     ASSERT_EQ(p, nullptr);
 
-    _MemoryBlock_t block =  _MemoryBlock_t::__from_user_space_memory(p);
-    ASSERT_EQ(block.__is_null(), true);
+    _MemoryBlock_t* block =  _MemoryBlock_t::__from_user_space_memory(p);
+    ASSERT_EQ(block, nullptr);
 
     std::vector<char*> pointers;
     pointers.reserve(MEM_ALLOC_ARRAY_LEN);
@@ -98,9 +98,9 @@ TEST(AllocatorTest, mem_malloc_test) {
         p = memory_alloc(i);
         pointers[i] = p;
         block =  _MemoryBlock_t::__from_user_space_memory(p);
-        ASSERT_EQ(block.__is_allocated(), true);
-        ASSERT_EQ(block.__is_free(), false);
-        ASSERT_EQ(*block._M_prev_blk_size, _MemoryBlock_t::_S_total_overhead_size);
+        ASSERT_EQ(block->__is_allocated(), true);
+        ASSERT_EQ(block->__is_free(), false);
+        ASSERT_EQ(block->_M_prev_blk_size, _MemoryBlock_t::_S_total_overhead_size);
     }
 
     for  (int i = 1; i < 8; i++) {
@@ -114,8 +114,8 @@ TEST(AllocatorTest, mem_malloc_test) {
         p = pointers[i];
         block =  _MemoryBlock_t::__from_user_space_memory(p);
         memory_free(p);
-        ASSERT_EQ(block.__is_allocated(), false);
-        ASSERT_EQ(block.__is_free(), true);
+        ASSERT_EQ(block->__is_allocated(), false);
+        ASSERT_EQ(block->__is_free(), true);
     }
 }
 
@@ -125,11 +125,11 @@ TEST(AllocatorTest, mem_free_test) {
     memset(array, 0, CALLOC_TEST_ARRAY_LEN);
     EXPECT_EQ(memcmp(ptr, array, CALLOC_TEST_ARRAY_LEN), 0);
 
-    _MemoryBlock_t block =  _MemoryBlock_t::__from_user_space_memory(ptr);
-    ASSERT_EQ(block.__is_allocated(), true);
+    _MemoryBlock_t* block =  _MemoryBlock_t::__from_user_space_memory(ptr);
+    ASSERT_EQ(block->__is_allocated(), true);
 
     memory_free(ptr);
-    ASSERT_EQ(block.__is_free(), true);
+    ASSERT_EQ(block->__is_free(), true);
 }
 
 TEST(AllocatorTest, mem_realloc_test) {

@@ -45,5 +45,6 @@ int main()
     }
 
     utils::alloc_malloc::__dump();
+
     return 0;
 }
