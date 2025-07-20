@@ -116,4 +116,24 @@ _NodeType* __list_find(_NodeType* __head,
     return __p;
 }
 
+template <typename _NodeType>
+_NodeType* __list_reverse(_NodeType* __head) noexcept
+{
+    auto __c = __head;
+
+    while (__c) {
+        auto __t = __c->_M_prev;
+        __c->_M_prev = __c->_M_next;
+        __c->_M_next = __t;
+
+        if (__c->_M_prev) {
+            __c = __c->_M_prev;
+        } else {
+            break;
+        }
+    }
+
+    return __c;
+}
+
 } // namespace utils::alloc_malloc::detail
