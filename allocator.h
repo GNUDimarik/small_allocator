@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <stddef.h>
 
-#define LOG_NDEBUG 1
+// #define LOG_NDEBUG 1
 #define LOG_TAG "_MemoryBlock"
 #include "logging.h"
 
@@ -32,12 +32,12 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      */
     static size_t __aligned_size(size_t __size) noexcept
     {
-        if (__size < _S_total_overhead_size)
-        {
+        if (__size < _S_total_overhead_size) {
             return _S_total_overhead_size;
         }
 
-        __size  = ((__size + (_S_total_overhead_size - 1)) & ~(_S_total_overhead_size - 1));
+        __size  = ((__size + (_S_total_overhead_size - 1))
+                  & ~(_S_total_overhead_size - 1));
         return __size;
     }
 
@@ -51,20 +51,15 @@ template <std::size_t _PointerSize> struct _MemoryBlock
     }
 
     /**
-     * @brief _S_size_of_pointer actually word should be address size but in terms of
-     * asm it's even qword.
-     */
-    static constexpr const int _S_size_of_pointer = _PointerSize;
-
-    /**
      * @brief _S_header_size size of implcit header
      */
-    static constexpr const int _S_header_size = _S_size_of_pointer;
+    static constexpr const int _S_header_size = _PointerSize;
 
     /**
      * @brief _S_total_overhead_size size of block ovehead with implicit header etc
      */
-    static constexpr const int _S_total_overhead_size = _S_header_size + sizeof (size_t);
+    static constexpr const int _S_total_overhead_size =
+        _S_header_size + sizeof (size_t);
 
     /**
      * @brief The _BlockState enum means block state allocated or free
@@ -86,6 +81,22 @@ template <std::size_t _PointerSize> struct _MemoryBlock
     size_t _M_size = 0;
 
     /**
+     * @brief _M_next - next item for free block
+     */
+    _MemoryBlock* _M_next = nullptr;
+
+    /**
+     * @brief _M_prev - previous item for free block
+     */
+    _MemoryBlock* _M_prev = nullptr;
+
+    /**
+     * @brief _MemoryBlock this constructor needs for free blocks list test
+     * @param size
+     */
+    _MemoryBlock(size_t size) noexcept : _M_size(size) {}
+
+    /**
      * @brief _MemoryBlock creates _MemoryBlock from __addr. It's header address not user space
      * @param __addr start of block
      */
@@ -94,7 +105,8 @@ template <std::size_t _PointerSize> struct _MemoryBlock
         _M_size = reinterpret_cast<size_t>(__addr);
 
         if (_M_size > 0) {
-            _M_prev_blk_size = *reinterpret_cast<size_t*>(__header() - _S_header_size);
+            _M_prev_blk_size = *reinterpret_cast<size_t*>
+                               (__header() - _S_header_size);
         }
     }
 
@@ -116,7 +128,8 @@ template <std::size_t _PointerSize> struct _MemoryBlock
     inline static _MemoryBlock* __from_user_space_memory(void* __address)
     {
         if (__address != nullptr) {
-            return __construct(reinterpret_cast<uint8_t*> (__address) - _S_total_overhead_size);
+            return __construct(reinterpret_cast<uint8_t*>
+                               (__address) - _S_total_overhead_size);
         }
 
         return nullptr;
@@ -188,7 +201,8 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      * @param size size of block
      * @param state block state
      */
-    void __put_to_header(size_t __size, _BlockState __state = _BlockState::_S_free) noexcept
+    void __put_to_header(size_t __size, _BlockState __state =
+                                        _BlockState::_S_free) noexcept
     {
         _M_size = __size | static_cast<int>(__state);
     }
@@ -231,7 +245,8 @@ template <std::size_t _PointerSize> struct _MemoryBlock
                 size_t __new_sz = __size() - __sz;
                 __put_to_header(__sz, _BlockState::_S_allocated);
                 auto __n = __next_implicit();
-                __n->__put_to_header(__new_sz - _S_total_overhead_size, _BlockState::_S_free);
+                __n->__put_to_header(__new_sz - _S_total_overhead_size,
+                                     _BlockState::_S_free);
                 __n->_M_prev_blk_size = __size();
                 return this;
             }
