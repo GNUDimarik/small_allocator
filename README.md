@@ -4,9 +4,9 @@ Please import project to Qt Creator as Cmake project and build!
 
 or you can do it from terminal:
 
-$ cd c_allocator
-$ mkdir build && cd build
-$ cmake ../
+$ cd c_allocator<br/>
+$ mkdir build && cd build<br/>
+$ cmake ../<br/>
 
 if you want to run unit tests then use -DENABLE_TESTS
 
