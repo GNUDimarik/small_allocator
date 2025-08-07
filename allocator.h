@@ -4,7 +4,7 @@
 #include <cstdint>
 #include <stddef.h>
 
-// #define LOG_NDEBUG 1
+#define LOG_NDEBUG 1
 #define LOG_TAG "_MemoryBlock"
 #include "logging.h"
 
@@ -230,7 +230,7 @@ template <std::size_t _PointerSize> struct _MemoryBlock
      * @return next block after the split with size __sz and current block has size before this operation - __sz
      * (values may be corrected depend from block overheads)
      * slicing happens from end of the block.
-     * if this block had no enough space for that null block is returned @see __is_null
+     * if this block had no enough space for that nullptr
      */
     _MemoryBlock* __slice(size_t __sz) noexcept
     {
