@@ -2,7 +2,7 @@
 #define DEBUG_H
 
 #if LOG_NDEBUG
-#   ifdef __linux__
+#   ifndef __ANDROID__
 #       include <stdio.h>
 #           define ALOGD(__ARGS__...)    \
             {                           \
