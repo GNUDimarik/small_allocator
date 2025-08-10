@@ -1,7 +1,5 @@
 #pragma once
 
-#include <iostream>
-
 namespace utils::alloc_malloc::detail {
 
 template<typename _NodeType> _NodeType* __list_find_min(_NodeType* __head)
