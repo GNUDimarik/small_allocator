@@ -6,7 +6,7 @@
 #include <vector>
 
 #define ALLOCATOR_IN_TEST 1
-#include "../allocator.h"
+#include "../_Allocator.h"
 
 #define HEAP_SIZE 1024
 #define CALLOC_TEST_ARRAY_LEN 100
@@ -17,35 +17,44 @@
 
 std::unique_ptr<char[]> sHeap(new char[HEAP_SIZE]);
 
-char* memory_alloc(size_t size) {
-    return reinterpret_cast<char*> (utils::alloc_malloc::mem_malloc(size));
+std::unique_ptr<mem::utils::_Allocator> gAlloc;
+
+char *memory_alloc(size_t size)
+{
+    return reinterpret_cast<char *> (gAlloc->malloc(size));
 }
 
-char* memory_calloc(size_t size, size_t count) {
-    return reinterpret_cast<char*> (utils::alloc_malloc::mem_calloc(size, count));
+char *memory_calloc(size_t size, size_t count)
+{
+    return reinterpret_cast<char *> (gAlloc->calloc(size, count));
 }
 
-char* memory_realloc(void* ptr, size_t new_size) {
-    return reinterpret_cast<char*> (utils::alloc_malloc::mem_realloc(ptr, new_size));
+char *memory_realloc(void *ptr, size_t new_size)
+{
+    return reinterpret_cast<char *> (gAlloc->realloc(ptr, new_size));
 }
 
-constexpr auto memory_free = utils::alloc_malloc::mem_free;
+void memory_free(void *p)
+{
+    gAlloc->free(p);
+}
 
-using utils::alloc_malloc::_MemoryBlock_t;
+using _MemoryBlock_t = mem::details::_MemBlock;
 
-TEST(AllocatorTest, merge_test) {
-    std::vector<char*> pointers;
+TEST(AllocatorTest, merge_test)
+{
+    std::vector<char *> pointers;
     pointers.reserve(MEM_ALLOC_ARRAY_LEN);
 
-    char* p = nullptr;
-    _MemoryBlock_t* block =  _MemoryBlock_t::__from_user_space_memory(p);
+    char *p = nullptr;
+    _MemoryBlock_t *block = _MemoryBlock_t::__from_user_memory(p);
     size_t expected_block_size = _MemoryBlock_t::_S_total_overhead_size;
     size_t prev_blk_size = _MemoryBlock_t::_S_total_overhead_size;
 
     for (int i = 1; i < 8; i++) {
         p = memory_alloc(i);
         pointers[i] = p;
-        block =  _MemoryBlock_t::__from_user_space_memory(p);
+        block = _MemoryBlock_t::__from_user_memory(p);
         ASSERT_EQ(block->__is_allocated(), true);
         ASSERT_EQ(block->__is_free(), false);
         ASSERT_EQ(block->__size(), expected_block_size);
@@ -53,10 +62,10 @@ TEST(AllocatorTest, merge_test) {
         ASSERT_EQ(block->_M_prev_blk_size, prev_blk_size);
     }
 
-    auto first =  _MemoryBlock_t::__from_user_space_memory(pointers[1]);
+    auto first = _MemoryBlock_t::__from_user_memory(pointers[1]);
 
     for (int i = 1; i < 8; i++) {
-        block =  _MemoryBlock_t::__from_user_space_memory(pointers[i]);
+        block = _MemoryBlock_t::__from_user_memory(pointers[i]);
         expected_block_size = block->__size();
 
         auto __n = block->__next_implicit();
@@ -84,26 +93,27 @@ TEST(AllocatorTest, merge_test) {
     ASSERT_EQ(first->_M_prev_blk_size, _MemoryBlock_t::_S_total_overhead_size);
 }
 
-TEST(AllocatorTest, mem_malloc_test) {
-    char* p = memory_alloc(0);
+TEST(AllocatorTest, mem_malloc_test)
+{
+    char *p = memory_alloc(0);
     ASSERT_EQ(p, nullptr);
 
-    _MemoryBlock_t* block =  _MemoryBlock_t::__from_user_space_memory(p);
+    _MemoryBlock_t *block = _MemoryBlock_t::__from_user_memory(p);
     ASSERT_EQ(block, nullptr);
 
-    std::vector<char*> pointers;
+    std::vector<char *> pointers;
     pointers.reserve(MEM_ALLOC_ARRAY_LEN);
 
     for (int i = 1; i < 8; i++) {
         p = memory_alloc(i);
         pointers[i] = p;
-        block =  _MemoryBlock_t::__from_user_space_memory(p);
+        block = _MemoryBlock_t::__from_user_memory(p);
         ASSERT_EQ(block->__is_allocated(), true);
         ASSERT_EQ(block->__is_free(), false);
         ASSERT_EQ(block->_M_prev_blk_size, _MemoryBlock_t::_S_total_overhead_size);
     }
 
-    for  (int i = 1; i < 8; i++) {
+    for (int i = 1; i < 8; i++) {
         // Not more 8 characters including ending \0
         std::string str = "it nr=" + std::to_string(i);
         strcpy(pointers[i], str.c_str());
@@ -112,36 +122,38 @@ TEST(AllocatorTest, mem_malloc_test) {
 
     for (int i = 1; i < 8; i++) {
         p = pointers[i];
-        block =  _MemoryBlock_t::__from_user_space_memory(p);
+        block = _MemoryBlock_t::__from_user_memory(p);
         memory_free(p);
         ASSERT_EQ(block->__is_allocated(), false);
         ASSERT_EQ(block->__is_free(), true);
     }
 }
 
-TEST(AllocatorTest, mem_free_test) {
+TEST(AllocatorTest, mem_free_test)
+{
     char *ptr = memory_calloc(CALLOC_TEST_ARRAY_LEN, CALLOC_TEST_ARG_SZ);
     char array[CALLOC_TEST_ARRAY_LEN];
     memset(array, 0, CALLOC_TEST_ARRAY_LEN);
     EXPECT_EQ(memcmp(ptr, array, CALLOC_TEST_ARRAY_LEN), 0);
 
-    _MemoryBlock_t* block =  _MemoryBlock_t::__from_user_space_memory(ptr);
+    _MemoryBlock_t *block = _MemoryBlock_t::__from_user_memory(ptr);
     ASSERT_EQ(block->__is_allocated(), true);
 
     memory_free(ptr);
     ASSERT_EQ(block->__is_free(), true);
 }
 
-TEST(AllocatorTest, mem_realloc_test) {
+TEST(AllocatorTest, mem_realloc_test)
+{
 
-    char* p0 = memory_alloc(100);
-    char* p1 = memory_alloc(200);
-    char* p2 = memory_alloc(100);
-    const char* str = "Hello world!";
+    char *p0 = memory_alloc(100);
+    char *p1 = memory_alloc(200);
+    char *p2 = memory_alloc(100);
+    const char *str = "Hello world!";
 
     memory_free(p2);
     strcpy(p1, str);
-    char* old_ptr = p1;
+    char *old_ptr = p1;
     p1 = memory_realloc(p1, 220);
     ASSERT_EQ(p1, old_ptr);
     ASSERT_STREQ(p1, str);
@@ -162,7 +174,8 @@ TEST(AllocatorTest, mem_realloc_test) {
     memory_free(p1);
 }
 
-TEST(AllocatorTest, mem_calloc_test) {
+TEST(AllocatorTest, mem_calloc_test)
+{
     char *ptr = memory_calloc(CALLOC_TEST_ARRAY_LEN, CALLOC_TEST_ARG_SZ);
     char array[CALLOC_TEST_ARRAY_LEN];
     memset(array, 0, CALLOC_TEST_ARRAY_LEN);
@@ -173,10 +186,11 @@ TEST(AllocatorTest, mem_calloc_test) {
     memory_free(ptr);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     ::testing::InitGoogleTest(&argc, argv);
 
-    utils::alloc_malloc::mem_init(reinterpret_cast<uint8_t*>(sHeap.get()), HEAP_SIZE);
+    gAlloc = std::make_unique<mem::utils::_Allocator>(sHeap.get(), HEAP_SIZE);
 
     return RUN_ALL_TESTS();
 }

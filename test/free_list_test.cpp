@@ -2,7 +2,7 @@
 #include <memory>
 #include <vector>
 
-#include "../allocator.h"
+#include "../_Allocator.h"
 #include "../free_list.h"
 
 #include <cstdlib> // For rand() and srand()
@@ -12,17 +12,21 @@
 
 using namespace utils::alloc_malloc::detail;
 
+using _MemoryBlock_t = mem::details::_MemBlock;
+
 static constexpr const int kListSize = 10;
+
 using vector_list_t = std::vector<std::shared_ptr<_MemoryBlock_t>>;
 
-namespace {
+namespace
+{
 
 auto create_node(size_t size) noexcept
 {
     return std::make_shared<_MemoryBlock_t>(size);
 }
 
-void make_sorted_vector(vector_list_t& blockList) noexcept
+void make_sorted_vector(vector_list_t &blockList) noexcept
 {
     blockList.clear();
     blockList.reserve(kListSize);
@@ -32,15 +36,15 @@ void make_sorted_vector(vector_list_t& blockList) noexcept
     }
 }
 
-void make_shuffled_vector(vector_list_t& blockList) noexcept
+void make_shuffled_vector(vector_list_t &blockList) noexcept
 {
     make_sorted_vector(blockList);
     std::random_device rd;
-    std::mt19937 gen { rd() };
+    std::mt19937 gen{rd()};
     std::shuffle(std::begin(blockList), std::end(blockList), gen);
 }
 
-void print_list(_MemoryBlock_t* __head) noexcept
+void print_list(_MemoryBlock_t *__head) noexcept
 {
     auto __p = __head;
     int count = 0;
@@ -66,7 +70,7 @@ TEST(FreeListTest, sorted_insert_test)
     vector_list_t blocks;
     make_shuffled_vector(blocks);
 
-    _MemoryBlock_t* head = blocks[0].get();
+    _MemoryBlock_t *head = blocks[0].get();
 
     for (size_t i = 1; i < blocks.size(); i++) {
         head = __list_insert_sorted(head, blocks[i].get());
@@ -75,7 +79,7 @@ TEST(FreeListTest, sorted_insert_test)
     vector_list_t srotedBlocks;
     make_sorted_vector(srotedBlocks);
     size_t index = 0;
-    _MemoryBlock_t* p = head;
+    _MemoryBlock_t *p = head;
 
     while (p) {
         ASSERT_EQ(p->_M_size == srotedBlocks[index++]->_M_size, true);
@@ -87,13 +91,13 @@ TEST(FreeListTest, find_test)
 {
     vector_list_t blocks;
     make_shuffled_vector(blocks);
-    _MemoryBlock_t* head = blocks[0].get();
+    _MemoryBlock_t *head = blocks[0].get();
 
     for (size_t i = 1; i < blocks.size(); i++) {
         head = __list_insert_sorted(head, blocks[i].get());
     }
 
-    for (const auto& b : blocks) {
+    for (const auto &b : blocks) {
         ASSERT_EQ(__list_find(head, b->_M_size) != nullptr, true);
     }
 }
@@ -102,7 +106,7 @@ TEST(FreeListTest, erase_test)
 {
     vector_list_t blocks;
     make_shuffled_vector(blocks);
-    _MemoryBlock_t* head = blocks[0].get();
+    _MemoryBlock_t *head = blocks[0].get();
 
     for (size_t i = 1; i < blocks.size(); i++) {
         head = __list_insert_sorted(head, blocks[i].get());
@@ -118,7 +122,7 @@ TEST(FreeListTest, find_min_test)
 {
     vector_list_t blocks;
     make_shuffled_vector(blocks);
-    _MemoryBlock_t* head = blocks[0].get();
+    _MemoryBlock_t *head = blocks[0].get();
 
     for (size_t i = 1; i < blocks.size(); i++) {
         head = __list_insert_sorted(head, blocks[i].get());
@@ -131,7 +135,7 @@ TEST(FreeListTest, reverse_list)
 {
     vector_list_t blocks;
     make_sorted_vector(blocks);
-    _MemoryBlock_t* head = blocks[0].get();
+    _MemoryBlock_t *head = blocks[0].get();
 
     for (size_t i = 1; i < blocks.size(); i++) {
         head = __list_insert_sorted(head, blocks[i].get());
