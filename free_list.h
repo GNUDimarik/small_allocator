@@ -128,13 +128,7 @@ _NodeType *__list_reverse(_NodeType *__head) noexcept
         auto __t = __c->_M_prev;
         __c->_M_prev = __c->_M_next;
         __c->_M_next = __t;
-
-        if (__c->_M_prev) {
-            __c = __c->_M_prev;
-        }
-        else {
-            break;
-        }
+        __c = __c->_M_prev;
     }
 
     return __c;
