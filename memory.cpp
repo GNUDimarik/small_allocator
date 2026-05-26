@@ -534,7 +534,7 @@ int mem_initialize(void *base, size_t size)
         ALOGE("Could not initialize memory with params base %p size %zu", base, size);
     }
 
-    ALOGD("gMemStart %p gMemEnd %p size %ld",
+    ALOGD("gMemStart %p gMemEnd %p size %td",
           gMemStart,
           gMemEnd,
           mem_block_char_ptr(gMemEnd) - mem_block_char_ptr(gMemStart));
