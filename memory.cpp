@@ -33,6 +33,8 @@ static constexpr const size_t kBlockFree = 0;
 
 static constexpr size_t kBinCount = 256;
 
+static constexpr size_t kBinHugeIndex = kBinCount - 1;
+
 MemBlock **gBinList;
 
 /**
@@ -272,7 +274,7 @@ _Node *bin_insert(_Node *block)
         gBinList[index] = free_list_insert_sorted_by_addr(gBinList[index], block);
     }
     else {
-        index = kBinCount - 1;
+        index = kBinHugeIndex;
         gBinList[index] = free_list_insert_sorted_by_size(gBinList[index], block);
     }
 
@@ -285,7 +287,7 @@ static size_t bin_index_from_size(size_t size)
         return size;
     }
 
-    return kBinCount - 1;
+    return kBinHugeIndex;
 }
 
 static void bin_erase(MemBlock *block)
@@ -317,20 +319,26 @@ static MemBlock *bin_find_free_block_and_erase(size_t size)
     auto block = gBinList[index];
 
     if (block) {
-        MemBlock *prev = nullptr;
+        if (index == kBinHugeIndex) {
+            MemBlock *prev = nullptr;
 
-        while (block) {
-            if (block->size >= size) {
-                break;
+            while (block) {
+                if (block->size >= size) {
+                    break;
+                }
+
+                prev = block;
+                block = block->next;
             }
 
-            prev = block;
-            block = block->next;
+            if (block) {
+                prev ? prev->next = block->next : gBinList[index] = block->next;
+            }
+
+            return block;
         }
 
-        if (block) {
-            prev ? prev->next = block->next : gBinList[index] = block->next;
-        }
+        gBinList[index] = block->next;
     }
 
     return block;
