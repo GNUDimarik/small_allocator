@@ -5,6 +5,9 @@
 #include <string.h>
 #include "memory.h"
 
+#define LOG_TAG "main"
+#include "logging.h"
+
 #define HEAP_SIZE 4096
 #define ITEMS_NUMBER 19
 
@@ -35,12 +38,12 @@ int main()
 
     mem_dump();
 
-    for (int i = 1; i < ITEMS_NUMBER; ++i) {
-        if (i % 2) {
-            std::cout << "vptr[" << i << "] " << vptr[i] << std::endl;
-            mem_free(vptr[i]);
-        }
-    }
+    /*for (int i = 1; i < ITEMS_NUMBER; ++i) {
+        //if (i % 2) {
+        std::cout << "vptr[" << i << "] " << vptr[i] << std::endl;
+        mem_free(vptr[i]);
+        // }
+    }*/
 
     /*for (int i = 1; i < ITEMS_NUMBER; ++i) {
         vptr[i] = char_alloc(i * 20);
@@ -52,8 +55,15 @@ int main()
         }
     }*/
 
+    mem_free(vptr[10]);
+    auto str = char_alloc(20);
+    mem_dump();
+    strcpy(str, "Jopka kota");
+    std::cout << "before realloc: str " << str << std::endl;
+    auto str1 = static_cast<char *>(mem_realloc(str, 600));
+    std::cout << "after realloc: str1 " << std::endl;
+    ALOGD("after realloc str %p str1 %p", str, str1);
 
-    //char_alloc(500);
     //char_alloc(500);
 
     mem_dump();

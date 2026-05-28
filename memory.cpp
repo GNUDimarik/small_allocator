@@ -25,6 +25,8 @@ static constexpr const size_t kFooterSize = kPointerSize;
 
 static constexpr const size_t kOverheadSize = kHeaderSize + kFooterSize;
 
+static constexpr const size_t kMinBlockSize = kPointerSize + kOverheadSize;
+
 static constexpr const size_t kBlockAllocated = 1;
 
 static constexpr const size_t kBlockFree = 0;
@@ -404,13 +406,30 @@ static size_t mem_block_aligned_size(size_t size)
     size_t aligned_size = 0;
 
     if (size < kOverheadSize) {
-        aligned_size = kPointerSize + kOverheadSize;
+        aligned_size = kMinBlockSize;
     }
     else {
         aligned_size = kPointerSize * ((size + kOverheadSize + kPointerSize - 1) / kPointerSize);
     }
 
     return aligned_size;
+}
+// TODO
+static void *mem_block_erase_merge(void *block)
+{
+    auto current = mem_block_prev(block);
+
+    if (mem_block_is_free(current)) {
+        bin_erase(MemBlock::place(current));
+    }
+
+    current = mem_block_next(block);
+
+    if (mem_block_is_free(current)) {
+        bin_erase(MemBlock::place(current));
+    }
+
+    return mem_block_merge(block);
 }
 
 void *mem_malloc(size_t size)
@@ -453,13 +472,16 @@ void *mem_malloc(size_t size)
             }
             else {
                 ALOGE("Out of memory on allocation request with size %zu aligned size %zu", size, aligned_size);
+                errno = ENOMEM;
             }
         }
         else {
             ALOGE("Could not allocate block with size %zu", size);
+            errno = EINVAL;
         }
     }
     else {
+        errno = EINVAL;
         ALOGE("Not initialized");
     }
 
@@ -481,6 +503,53 @@ void *mem_calloc(size_t num, size_t size)
 
 void *mem_realloc(void *p, size_t new_sz)
 {
+    if (p) {
+        if (new_sz > 0) {
+            size_t size = mem_block_size(p);
+
+            if (new_sz != size) {
+                void *newBlock = nullptr;
+
+                if (new_sz > size) {
+                    newBlock = mem_block_erase_merge(p);
+                    auto aligned_size = mem_block_aligned_size(new_sz);
+                    auto newBlockSize = mem_block_size(newBlock);
+                    ALOGD("block (%p) size %zu newBlock (%p) size %zu", p, size, newBlock, newBlockSize);
+
+                    if (newBlockSize >= aligned_size) {
+                        newBlock = mem_block_place(newBlock, aligned_size);
+
+                        if (newBlock && newBlock != p) {
+                            return memmove(newBlock, p, size);
+                        }
+
+                        return p;
+                    }
+                }
+
+                ALOGD("new_sz %zu aligned size %zu size %zu", new_sz, mem_block_aligned_size(new_sz), size);
+                newBlock = mem_malloc(new_sz);
+
+                if (newBlock) {
+                    memmove(newBlock, p, std::min(size, new_sz));
+                    mem_free(p);
+                    return newBlock;
+                }
+            }
+            else {
+                ALOGD("new size is equal to current size. do nothing");
+            }
+        }
+        else {
+            ALOGE("Wrong size %zu", new_sz);
+            errno = EINVAL;
+        }
+    }
+    else {
+        errno = EINVAL;
+        ALOGE("Invalid pointer (%p)", p);
+    }
+
     return nullptr;
 }
 
@@ -489,19 +558,7 @@ void mem_free(void *ptr)
     if (ptr != nullptr && mem_block_is_allocated(ptr)) {
         size_t size = mem_block_size(ptr);
         mem_block_init_block(ptr, size, kBlockFree);
-        auto current = mem_block_prev(ptr);
-
-        if (mem_block_is_free(current)) {
-            bin_erase(MemBlock::place(current));
-        }
-
-        current = mem_block_next(ptr);
-
-        if (mem_block_is_free(current)) {
-            bin_erase(MemBlock::place(current));
-        }
-
-        ptr = mem_block_merge(ptr);
+        ptr = mem_block_erase_merge(ptr);
         bin_insert(MemBlock::createWithNullNext(ptr));
     }
     else {
