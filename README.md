@@ -1,4 +1,4 @@
-#A Implicit blocks list with boundary tags Knuth algoritm with sorted free blocks list and bins
+# Implicit blocks list with boundary tags Knuth algoritm with sorted free blocks list and bins
 Free blocks sorted by size and address
 Size alighment is sizeof(void*) so min block size is 24 byes because it has sizeof(void*) header and footer with the same size and minimum block sie is sizeof(void*)
 
