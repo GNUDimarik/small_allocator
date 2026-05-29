@@ -8,8 +8,11 @@
 #define LOG_TAG "main"
 #include "logging.h"
 
-#define HEAP_SIZE 4096
+#define PAGE_SIZE 4096
+#define HEAP_SIZE (PAGE_SIZE * 1)
 #define ITEMS_NUMBER 19
+
+static char *char_alloc(size_t size) __attribute__((unused));
 
 static char *char_alloc(size_t size)
 {
@@ -24,51 +27,15 @@ int main()
     std::vector<char *> vptr;
     vptr.reserve(ITEMS_NUMBER);
     mem_initialize(heap.get(), HEAP_SIZE);
-    mem_dump();
-
-    for (int i = 1; i < ITEMS_NUMBER; ++i) {
-        vptr[i] = char_alloc(20);
-        std::string str = "str zalupa" + std::to_string(i);
-        auto ptr = vptr[i];
-
-        if (ptr) {
-            strcpy(ptr, str.c_str());
-        }
-    }
-
-    mem_dump();
-
-    /*for (int i = 1; i < ITEMS_NUMBER; ++i) {
-        //if (i % 2) {
-        std::cout << "vptr[" << i << "] " << vptr[i] << std::endl;
-        mem_free(vptr[i]);
-        // }
-    }*/
-
-    /*for (int i = 1; i < ITEMS_NUMBER; ++i) {
-        vptr[i] = char_alloc(i * 20);
-        std::string str = "str zalupa" + std::to_string(i);
-        auto ptr = vptr[i];
-
-        if (ptr) {
-            strcpy(ptr, str.c_str());
-        }
-    }*/
-
-    mem_free(vptr[10]);
-    auto str = char_alloc(20);
-    mem_dump();
-    strcpy(str, "Jopka kota");
-    std::cout << "before realloc: str " << str << std::endl;
-    auto str1 = static_cast<char *>(mem_realloc(str, 600));
-    std::cout << "after realloc: str1 " << std::endl;
-    ALOGD("after realloc str %p str1 %p", str, str1);
-
-    //char_alloc(500);
-
-    mem_dump();
-
-    dump_bins();
-
+    dump_mem();
+    auto a = char_alloc(12);
+    auto b = char_alloc(12);
+    auto c = char_alloc(12);
+    mem_free(a);
+    dump_mem();
+    mem_free(b);
+    dump_mem();
+    mem_free(c);
+    dump_mem();
     return 0;
 }
