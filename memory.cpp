@@ -115,6 +115,11 @@ static size_t *mem_block_size_t_ptr(void *_p)
     return reinterpret_cast<size_t *>(_p);
 }
 
+static size_t mem_block_get_size(void *_p)
+{
+    return *mem_block_size_t_ptr(_p) & ~0x01;
+}
+
 static char *mem_block_char_ptr(void *_p)
 {
     return reinterpret_cast<char *>(_p);
@@ -137,12 +142,12 @@ static char *mem_block_header(void *_p)
 
 static size_t mem_block_size(void *_p)
 {
-    return (*mem_block_size_t_ptr(mem_block_header(_p)) & ~0x01);
+    return mem_block_get_size(mem_block_header(_p));
 }
 
 static char *mem_block_footer(void *_p)
 {
-    return mem_block_char_ptr(_p) + mem_block_size(_p) - kFooterSize;
+    return mem_block_char_ptr(_p) + mem_block_size(_p);
 }
 
 static bool mem_block_is_allocated(void *p)
@@ -167,7 +172,7 @@ static void mem_block_put_to_footer(void *_p, size_t _sz, size_t state)
 
 static void *mem_block_next(void *_p)
 {
-    return mem_block_char_ptr(mem_block_header(_p)) + mem_block_size(_p) + kOverheadSize;
+    return mem_block_footer(_p) + kOverheadSize;
 }
 
 static inline void *mem_block_init_block(void *_p, size_t _sz,
@@ -181,7 +186,9 @@ static inline void *mem_block_init_block(void *_p, size_t _sz,
 static void *mem_block_prev(void *_p)
 {
     char *header = mem_block_char_ptr(mem_block_header(_p));
-    return (header - mem_block_size(header));
+    char *prev_footer = header - kFooterSize;
+    size_t prev_size = mem_block_get_size(prev_footer);
+    return prev_footer - prev_size;
 }
 
 static inline size_t mem_block_size_with_overhead(void *ptr)
@@ -211,6 +218,11 @@ struct MemBlock
     {
         return mem_block_char_ptr(this) + kHeaderSize;
     }
+
+    size_t blockSize()
+    {
+        return mem_block_size(toBlock());
+    }
 };
 
 template<typename _Node>
@@ -225,7 +237,7 @@ _Node *free_list_insert_sorted_by_size(_Node *head,
 
     if (head != block) {
         auto cmp = [](_Node *first, _Node *second)
-        { return mem_block_size(first->toBlock()) <= mem_block_size(second->toBlock()); };
+        { return first->blockSize() <= second->blockSize(); };
         return __free_list_insert_sorted<_Node, decltype(cmp)>(head, block, cmp);
     }
 
@@ -261,7 +273,7 @@ template<typename _Node>
 _Node *free_list_find_first_fit(_Node *head, size_t size)
 {
     auto cmp = [](_Node *block, size_t size)
-    { return mem_block_size(block->toBlock()) >= size; };
+    { return block->blockSize() >= size; };
     return __free_list_find_first_fit(head, size, cmp);
 }
 
@@ -269,7 +281,7 @@ template<typename _Node>
 _Node *bin_insert(_Node *block)
 {
     // Block needs to be free here otherwise size is invalid since allocated bit is set
-    size_t index = block->size;
+    size_t index = block->blockSize();
 
     if (index < kBinHugeIndex) {
         gBinList[index] = free_list_insert_sorted_by_addr(gBinList[index], block);
@@ -292,7 +304,7 @@ static size_t bin_index_from_size(size_t size)
 
 static void bin_erase(MemBlock *block)
 {
-    size_t index = bin_index_from_size(mem_block_size(block->toBlock()));
+    size_t index = bin_index_from_size(block->blockSize());
     auto bin = gBinList[index];
 
     if (bin) {
@@ -325,7 +337,7 @@ static MemBlock *bin_erase_find(size_t index, size_t size)
     auto block = bin;
 
     while (block) {
-        if (block->size >= size) {
+        if (block->blockSize() >= size) {
             break;
         }
 
@@ -372,8 +384,8 @@ static void *mem_block_place(void *block, size_t sz)
         mem_block_put_to_header(block, sz, kBlockAllocated);
         mem_block_put_to_footer(block, sz, kBlockAllocated);
         auto next = mem_block_next(block);
-        mem_block_put_to_header(next, cur_size - sz - kFooterSize, kBlockFree);
-        mem_block_put_to_footer(next, cur_size - sz - kFooterSize, kBlockFree);
+        mem_block_put_to_header(next, cur_size - sz - kOverheadSize, kBlockFree);
+        mem_block_put_to_footer(next, cur_size - sz - kOverheadSize, kBlockFree);
         return block;
     }
     else {
@@ -402,7 +414,7 @@ static void *mem_block_merge(void *ptr)
     }
 
     else if (prev_allocated && !next_allocated) {
-        size += mem_block_size(next) + kFooterSize;
+        size += mem_block_size(next) + kOverheadSize;
         void *footer = mem_block_footer(ptr);
         mem_block_put_to_header(ptr, size, kBlockFree);
         mem_block_pack(footer, size, kBlockFree);
@@ -410,7 +422,7 @@ static void *mem_block_merge(void *ptr)
 
     else if (!prev_allocated && next_allocated) {
         void *footer = mem_block_footer(ptr);
-        size += mem_block_size(prev) + kFooterSize;
+        size += mem_block_size(prev) + kOverheadSize;
         mem_block_put_to_header(prev, size, kBlockFree);
         mem_block_pack(footer, size, kBlockFree);
         return prev;
@@ -420,7 +432,7 @@ static void *mem_block_merge(void *ptr)
         void *header = mem_block_header(prev);
         void *footer = mem_block_footer(next);
         size += mem_block_size(prev) +
-            mem_block_size(next) + kOverheadSize;
+            mem_block_size(next) + kOverheadSize * 2;
         mem_block_pack(header, size, kBlockFree);
         mem_block_pack(footer, size, kBlockFree);
         return prev;
