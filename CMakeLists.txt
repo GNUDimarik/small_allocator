@@ -27,7 +27,8 @@ if (DEFINED ENABLE_TEST)
             allocator_test.cpp
             memory.cpp
             memory.h
-            logging.h)
+            logging.h
+    )
 
     target_link_libraries(
             allocator_test
@@ -43,3 +44,5 @@ add_executable(${PROJECT_NAME} main.cpp
         logging.h)
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR})
+target_compile_definitions(${PROJECT_NAME} PUBLIC VALIDATE_MEMORY=1)
+add_compile_definitions(VALIDATE_MEMORY)

@@ -9,8 +9,8 @@
 #include "logging.h"
 
 #define PAGE_SIZE 4096
-#define HEAP_SIZE (PAGE_SIZE * 1)
-#define ITEMS_NUMBER 19
+#define HEAP_SIZE (4096 + 1000000 + 2048)
+#define ITEMS_NUMBER 100
 
 static char *char_alloc(size_t size) __attribute__((unused));
 
@@ -27,15 +27,14 @@ int main()
     std::vector<char *> vptr;
     vptr.reserve(ITEMS_NUMBER);
     mem_initialize(heap.get(), HEAP_SIZE);
+
     dump_mem();
-    auto a = char_alloc(12);
-    auto b = char_alloc(12);
-    auto c = char_alloc(12);
-    mem_free(a);
+
+    for (int i = 0; i < ITEMS_NUMBER; ++i) {
+        vptr[i] = char_alloc(16);
+    }
+
     dump_mem();
-    mem_free(b);
-    dump_mem();
-    mem_free(c);
-    dump_mem();
+
     return 0;
 }
