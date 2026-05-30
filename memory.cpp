@@ -421,26 +421,22 @@ static ListHead *bin_find_free_block(size_t size)
 static void *mem_block_place(void *block, size_t sz)
 {
     size_t cur_size = mem_block_size(block);
-    size_t remain = cur_size - sz - kOverheadSize;
+    size_t remain = cur_size - sz;
 
-    if (remain >= kOverheadSize) {
+    if (remain >= kOverheadSize * 2) {
+        remain -= kOverheadSize;
         mem_block_put_to_header(block, sz, kBlockAllocated);
         mem_block_put_to_footer(block, sz, kBlockAllocated);
         auto next = mem_block_next(block);
         mem_block_put_to_header(next, remain, kBlockFree);
         mem_block_put_to_footer(next, remain, kBlockFree);
-        MEM_BLOCK_PRINT(next);
         return block;
     }
-    /*else {
+    else if (cur_size == sz) {
         mem_block_put_to_header(block, sz, kBlockAllocated);
         mem_block_put_to_footer(block, sz, kBlockAllocated);
-        auto next = mem_block_next(block);
-        mem_block_put_to_header(next, remain, kBlockFree);
-        mem_block_put_to_footer(next, remain, kBlockFree);
-        dump_mem();
         return block;
-    }*/
+    }
 
     return nullptr;
 }
@@ -551,16 +547,19 @@ void *mem_malloc(size_t size)
 
                 if (block != nullptr) {
                     block = mem_block_place(block, aligned_size);
-                    auto next = mem_block_next(block);
 
-                    if (next < gMemEnd && next > gMemStart && mem_block_is_free(next)) {
-                        auto nextBlock = mem_block_list_head(next);
+                    if (block) {
+                        auto next = mem_block_next(block);
 
-                        if (blockFromBin) {
-                            bin_insert(nextBlock);
-                        }
-                        else {
-                            gFreeList = free_list_insert(nextBlock);
+                        if (next < gMemEnd && next > gMemStart && mem_block_is_free(next)) {
+                            auto nextBlock = mem_block_list_head(next);
+
+                            if (blockFromBin) {
+                                bin_insert(nextBlock);
+                            }
+                            else {
+                                gFreeList = free_list_insert(nextBlock);
+                            }
                         }
                     }
                 }
