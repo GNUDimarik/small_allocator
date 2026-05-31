@@ -5,7 +5,7 @@
 
 #include "memory.h"
 
-// define LOG_NDEBUG 1
+// #define LOG_NDEBUG 1
 #define LOG_TAG "memory"
 #include "logging.h"
 
@@ -225,57 +225,6 @@ static void mem_block_print(void *ptr, const char *func)
 
 #define MEM_BLOCK_PRINT(bp) mem_block_print(bp, __func__)
 
-#ifdef VALIDATE_MEMORY
-
-static void mem_block_validate(void *block)
-{
-    auto header =
-        *reinterpret_cast<size_t *>(
-            mem_block_header(block));
-
-    auto footer =
-        *reinterpret_cast<size_t *>(
-            mem_block_footer(block));
-
-    if (header != footer) {
-        ALOGE(
-            "MEMORY CORRUPTION block=%p header=%zx footer=%zx",
-            block,
-            header,
-            footer);
-
-        abort();
-    }
-
-    ALOGD(
-        "block=%p size=%zu next=%p\n",
-        block,
-        mem_block_size(block),
-        mem_block_next(block)
-    );
-    ALOGD("block %p is OK", block);
-}
-
-static void mem_block_validate_layout(void *block, const char *func)
-{
-    MEM_BLOCK_PRINT(block);
-    auto size = mem_block_size(block);
-
-    auto next = mem_block_next(block);
-
-    if (next <= block) {
-        ALOGE("%s: bad next(%p) for block %p", func, next, block);
-    }
-
-    if (std::greater_equal<void *>{}(next, gMemEnd)) {
-        ALOGE("%s: next(%p) out of heap block %p", func, next, block);
-    }
-}
-
-#define MEM_BLOCK_VALIDATE_LAYOUT(bp) // mem_block_validate_layout(bp, __func__)
-
-#endif
-
 template<typename _Node>
 _Node *free_list_insert_sorted_by_size(_Node *head,
                                        _Node *block)
@@ -464,9 +413,6 @@ static void *mem_block_merge(void *ptr)
         size += mem_block_size(prev) + kOverheadSize;
         mem_block_put_to_header(prev, size, kBlockFree);
         mem_block_pack(footer, size, kBlockFree);
-#ifdef VALIDATE_MEMORY
-        MEM_BLOCK_PRINT(prev);
-#endif
         return prev;
     }
 
@@ -477,15 +423,9 @@ static void *mem_block_merge(void *ptr)
             mem_block_size(next) + kOverheadSize * 2;
         mem_block_pack(header, size, kBlockFree);
         mem_block_pack(footer, size, kBlockFree);
-#ifdef VALIDATE_MEMORY
-        MEM_BLOCK_PRINT(prev);
-#endif
         return prev;
     }
 
-#ifdef VALIDATE_MEMORY
-    MEM_BLOCK_PRINT(ptr);
-#endif
     return ptr;
 }
 
@@ -561,10 +501,6 @@ void *mem_malloc(size_t size)
                     }
                 }
             }
-            else {
-                ALOGE("Out of memory on allocation request with size %zu aligned size %zu", size, aligned_size);
-                errno = ENOMEM;
-            }
         }
         else {
             ALOGE("Could not allocate block with size %zu", size);
@@ -575,12 +511,6 @@ void *mem_malloc(size_t size)
         errno = EINVAL;
         ALOGE("Not initialized");
     }
-
-#ifdef VALIDATE_MEMORY
-    if (block) {
-        MEM_BLOCK_VALIDATE_LAYOUT(block);
-    }
-#endif
 
     return block;
 }
@@ -614,11 +544,6 @@ void *mem_realloc(void *p, size_t new_sz)
 
 void mem_free(void *ptr)
 {
-#ifdef VALIDATE_MEMORY
-    if (ptr) {
-        MEM_BLOCK_VALIDATE_LAYOUT(ptr);
-    }
-#endif
     if (ptr != nullptr && mem_block_is_allocated(ptr)) {
         size_t size = mem_block_size(ptr);
         mem_block_init_block(ptr, size, kBlockFree);
@@ -761,16 +686,3 @@ void dump_free_mem()
 {
     dump_list(gFreeList);
 }
-
-#ifdef VALIDATE_MEMORY
-
-void mem_validate_all_blocks()
-{
-    if (gMemStart != nullptr && gMemEnd != nullptr) {
-        for (void *cur_blk = mem_block_user_ptr(gMemStart); cur_blk <= mem_block_user_ptr(gMemEnd);
-             cur_blk = mem_block_next(cur_blk)) {
-            mem_block_validate(cur_blk);
-        }
-    }
-}
-#endif

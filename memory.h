@@ -14,8 +14,4 @@ void dump_mem();
 void dump_free_mem();
 void dump_bins();
 
-#ifdef VALIDATE_MEMORY
-void mem_validate_all_blocks();
-#endif
-
 #endif //MEMORY_H
