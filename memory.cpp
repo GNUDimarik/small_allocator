@@ -9,8 +9,11 @@
 #define LOG_TAG "memory"
 #include "logging.h"
 
-
-struct ListHead;
+struct ListHead
+{
+    ListHead *next = nullptr;
+    ListHead *prev = nullptr;
+};
 
 ListHead *gFreeList;
 
@@ -41,61 +44,6 @@ ListHead **gBinList;
 #endif
 
 ListHead *gBinList[kBinCount];
-
-/**
- * Sorted linear list
- */
-
-template<typename _Node, typename _Cmp>
-_Node *__free_list_insert_sorted(_Node *head,
-                                 _Node *block,
-                                 _Cmp cmp)
-{
-    if (!head) {
-        head = block;
-        head->next = nullptr;
-        return head;
-    }
-
-    auto cursor = head;
-
-    if (cmp(block, cursor) && block != cursor) {
-        block->next = cursor;
-        return block;
-    }
-
-    while (cursor->next && !cmp(block, cursor->next)) {
-        cursor = cursor->next;
-    }
-
-    block->next = cursor->next;
-    cursor->next = block;
-    block->prev = cursor;
-
-    if (cursor->next) {
-        cursor->next->prev = block;
-    }
-
-    return head;
-}
-
-template<typename _Node, typename _Cmp>
-_Node *__free_list_find_first_fit(_Node *head,
-                                  size_t size,
-                                  _Cmp cmp)
-{
-    auto cursor = head;
-
-    while (cursor) {
-        if (cmp(cursor, size)) {
-            return cursor;
-        }
-
-        cursor = cursor->next;
-    }
-
-    return nullptr;
-}
 
 /**
  * Memory block related stuff
@@ -187,12 +135,6 @@ static inline size_t mem_block_size_with_overhead(void *ptr)
     return mem_block_size(ptr) + kOverheadSize;
 }
 
-struct ListHead
-{
-    ListHead *next = nullptr;
-    ListHead *prev = nullptr;
-};
-
 static inline ListHead *mem_block_list_head(void *ptr)
 {
     auto head = new(ptr) ListHead;
@@ -216,23 +158,20 @@ static void mem_block_print(void *ptr, const char *func)
 
 #define MEM_BLOCK_PRINT(bp) mem_block_print(bp, __func__)
 
-template<typename _Node>
-_Node *free_list_insert_sorted_by_size(_Node *head,
-                                       _Node *block)
+static ListHead *list_erase(ListHead *head)
 {
-    block->next = nullptr;
+    auto prev = head->prev;
+    auto next = head->next;
 
-    if (!head) {
-        return block;
+    if (prev) {
+        prev->next = next;
     }
 
-    if (head != block) {
-        auto cmp = [](_Node *first, _Node *second)
-        { return mem_block_size(first) <= mem_block_size(second); };
-        return __free_list_insert_sorted<_Node, decltype(cmp)>(head, block, cmp);
+    if (next) {
+        next->prev = prev;
     }
 
-    return block;
+    return next;
 }
 
 template<typename _Node>
@@ -248,6 +187,75 @@ _Node *free_list_prepend(_Node *head,
     if (head != block) {
         block->next = head;
         head->prev = block;
+    }
+
+    return block;
+}
+
+template<typename _Node, typename _Cmp>
+_Node *__free_list_insert_sorted(_Node *head,
+                                 _Node *block,
+                                 _Cmp cmp)
+{
+    if (!head) {
+        head = block;
+        head->next = nullptr;
+        return head;
+    }
+
+    auto cursor = head;
+
+    if (cmp(block, cursor) && block != cursor) {
+        return free_list_prepend(cursor, head);
+    }
+
+    while (cursor->next && !cmp(block, cursor->next)) {
+        cursor = cursor->next;
+    }
+
+    block->next = cursor->next;
+    cursor->next = block;
+    block->prev = cursor;
+
+    if (cursor->next) {
+        cursor->next->prev = block;
+    }
+
+    return head;
+}
+
+template<typename _Node, typename _Cmp>
+_Node *__free_list_find_first_fit(_Node *head,
+                                  size_t size,
+                                  _Cmp cmp)
+{
+    auto cursor = head;
+
+    while (cursor) {
+        if (cmp(cursor, size)) {
+            return cursor;
+        }
+
+        cursor = cursor->next;
+    }
+
+    return nullptr;
+}
+
+template<typename _Node>
+_Node *free_list_insert_sorted_by_size(_Node *head,
+                                       _Node *block)
+{
+    block->next = nullptr;
+
+    if (!head) {
+        return block;
+    }
+
+    if (head != block) {
+        auto cmp = [](_Node *first, _Node *second)
+        { return mem_block_size(first) <= mem_block_size(second); };
+        return __free_list_insert_sorted<_Node, decltype(cmp)>(head, block, cmp);
     }
 
     return block;
@@ -290,22 +298,6 @@ static size_t bin_index_from_size(size_t size)
     }
 
     return kBinHugeIndex;
-}
-
-static ListHead *list_erase(ListHead *head)
-{
-    auto prev = head->prev;
-    auto next = head->next;
-
-    if (prev) {
-        prev->next = next;
-    }
-
-    if (next) {
-        next->prev = prev;
-    }
-
-    return next;
 }
 
 static void bin_erase(void *block)
@@ -524,6 +516,7 @@ void *mem_realloc(void *p, size_t new_sz)
 
     if (block) {
         memmove(block, p, std::min(new_sz, mem_block_size(p)));
+        mem_free(p);
     }
 
     return block;
