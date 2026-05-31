@@ -8,8 +8,11 @@
 #define LOG_TAG "main"
 #include "logging.h"
 
-#define HEAP_SIZE 4096
-#define ITEMS_NUMBER 19
+#define PAGE_SIZE 4096
+#define HEAP_SIZE PAGE_SIZE//(4096 + 1000000 + 2048)
+#define ITEMS_NUMBER 1000
+
+static char *char_alloc(size_t size) __attribute__((unused));
 
 static char *char_alloc(size_t size)
 {
@@ -23,52 +26,27 @@ int main()
     std::unique_ptr<char[]> heap(new char[HEAP_SIZE]);
     std::vector<char *> vptr;
     vptr.reserve(ITEMS_NUMBER);
+    auto p = heap.get();
+    *p = 'a';
     mem_initialize(heap.get(), HEAP_SIZE);
-    mem_dump();
-
-    for (int i = 1; i < ITEMS_NUMBER; ++i) {
-        vptr[i] = char_alloc(20);
-        std::string str = "str zalupa" + std::to_string(i);
-        auto ptr = vptr[i];
-
-        if (ptr) {
-            strcpy(ptr, str.c_str());
+    dump_mem();
+#if 1
+    for (int iter = 0; iter < 1000; ++iter) {
+        void* p1 = mem_malloc(rand() % 1024 + 1);
+        if (p1) {
+            void* p2 = mem_realloc(p1, rand() % 2048 + 1);
+            if (p2) {
+                void* p3 = nullptr;//mem_calloc(rand() % 100 + 1, 8);
+                if (p3) {
+                    mem_free(p3);
+                }
+                mem_free(p2);
+            } else {
+                mem_free(p1);
+            }
         }
     }
-
-    mem_dump();
-
-    /*for (int i = 1; i < ITEMS_NUMBER; ++i) {
-        //if (i % 2) {
-        std::cout << "vptr[" << i << "] " << vptr[i] << std::endl;
-        mem_free(vptr[i]);
-        // }
-    }*/
-
-    /*for (int i = 1; i < ITEMS_NUMBER; ++i) {
-        vptr[i] = char_alloc(i * 20);
-        std::string str = "str zalupa" + std::to_string(i);
-        auto ptr = vptr[i];
-
-        if (ptr) {
-            strcpy(ptr, str.c_str());
-        }
-    }*/
-
-    mem_free(vptr[10]);
-    auto str = char_alloc(20);
-    mem_dump();
-    strcpy(str, "Jopka kota");
-    std::cout << "before realloc: str " << str << std::endl;
-    auto str1 = static_cast<char *>(mem_realloc(str, 600));
-    std::cout << "after realloc: str1 " << std::endl;
-    ALOGD("after realloc str %p str1 %p", str, str1);
-
-    //char_alloc(500);
-
-    mem_dump();
-
-    dump_bins();
-
+#endif
+    dump_mem();
     return 0;
 }

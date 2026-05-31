@@ -5,18 +5,18 @@
 
 #include "memory.h"
 
-// define LOG_NDEBUG 1
+// #define LOG_NDEBUG 1
 #define LOG_TAG "memory"
 #include "logging.h"
 
 
-struct MemBlock;
+struct ListHead;
 
-MemBlock *gFreeList;
+ListHead *gFreeList;
 
-void *gMemStart{};
+char *gMemStart{};
 
-void *gMemEnd{};
+char *gMemEnd{};
 
 static constexpr const size_t kPointerSize = sizeof(void *);
 
@@ -36,7 +36,11 @@ static constexpr size_t kBinCount = 256;
 
 static constexpr size_t kBinHugeIndex = kBinCount - 1;
 
-MemBlock **gBinList;
+#if 0
+ListHead **gBinList;
+#endif
+
+ListHead *gBinList[kBinCount];
 
 /**
  * Sorted linear list
@@ -172,7 +176,7 @@ static void mem_block_put_to_footer(void *_p, size_t _sz, size_t state)
 
 static void *mem_block_next(void *_p)
 {
-    return mem_block_footer(_p) + kOverheadSize;
+    return mem_block_char_ptr(_p) + mem_block_size(_p) + kOverheadSize;
 }
 
 static inline void *mem_block_init_block(void *_p, size_t _sz,
@@ -196,34 +200,30 @@ static inline size_t mem_block_size_with_overhead(void *ptr)
     return mem_block_size(ptr) + kOverheadSize;
 }
 
-struct MemBlock
+struct ListHead
 {
-    size_t size;
-    MemBlock *next;
-    size_t footer;
-
-    static MemBlock *createWithNullNext(void *addr)
-    {
-        auto block = new(mem_block_header(addr)) MemBlock;
-        block->next = nullptr;
-        return block;
-    }
-
-    static MemBlock *place(void *addr)
-    {
-        return new(mem_block_header(addr)) MemBlock;
-    }
-
-    void *toBlock()
-    {
-        return mem_block_char_ptr(this) + kHeaderSize;
-    }
-
-    size_t blockSize()
-    {
-        return mem_block_size(toBlock());
-    }
+    ListHead *next = nullptr;
 };
+
+static inline ListHead *mem_block_list_head(void *ptr)
+{
+    auto head = new(ptr) ListHead;
+    head->next = nullptr;
+    return head;
+}
+
+static void mem_block_print(void *ptr, const char *func)
+{
+    dump_mem();
+    ALOGD("%s: block %p header %d footer %d size %zu allocated %s",
+          func,
+          ptr,
+          *mem_block_header(ptr),
+          *mem_block_footer(ptr),
+          mem_block_size(ptr), mem_block_is_allocated(ptr) ? "yes" : "no");
+}
+
+#define MEM_BLOCK_PRINT(bp) mem_block_print(bp, __func__)
 
 template<typename _Node>
 _Node *free_list_insert_sorted_by_size(_Node *head,
@@ -237,7 +237,7 @@ _Node *free_list_insert_sorted_by_size(_Node *head,
 
     if (head != block) {
         auto cmp = [](_Node *first, _Node *second)
-        { return first->blockSize() <= second->blockSize(); };
+        { return mem_block_size(first) <= mem_block_size(second); };
         return __free_list_insert_sorted<_Node, decltype(cmp)>(head, block, cmp);
     }
 
@@ -273,7 +273,7 @@ template<typename _Node>
 _Node *free_list_find_first_fit(_Node *head, size_t size)
 {
     auto cmp = [](_Node *block, size_t size)
-    { return block->blockSize() >= size; };
+    { return mem_block_size(block) >= size; };
     return __free_list_find_first_fit(head, size, cmp);
 }
 
@@ -281,7 +281,7 @@ template<typename _Node>
 _Node *bin_insert(_Node *block)
 {
     // Block needs to be free here otherwise size is invalid since allocated bit is set
-    size_t index = block->blockSize();
+    size_t index = mem_block_size(block);
 
     if (index < kBinHugeIndex) {
         gBinList[index] = free_list_insert_sorted_by_addr(gBinList[index], block);
@@ -302,13 +302,13 @@ static size_t bin_index_from_size(size_t size)
     return kBinHugeIndex;
 }
 
-static void bin_erase(MemBlock *block)
+static void bin_erase(void *block)
 {
-    size_t index = bin_index_from_size(block->blockSize());
+    size_t index = bin_index_from_size(mem_block_size(block));
     auto bin = gBinList[index];
 
     if (bin) {
-        MemBlock *prev = nullptr;
+        ListHead *prev = nullptr;
 
         while (bin) {
             if (bin == block) {
@@ -330,14 +330,13 @@ static void bin_erase(MemBlock *block)
     }
 }
 
-static MemBlock *bin_erase_find(size_t index, size_t size)
+static ListHead *bin_find(size_t index, size_t size)
 {
-    MemBlock *prev = nullptr;
-    auto bin = gBinList[index];
-    auto block = bin;
+    ListHead *prev = nullptr;
+    auto block = gBinList[index];
 
     while (block) {
-        if (block->blockSize() >= size) {
+        if (mem_block_size(block) >= size) {
             break;
         }
 
@@ -345,31 +344,22 @@ static MemBlock *bin_erase_find(size_t index, size_t size)
         block = block->next;
     }
 
-    if (block) {
-        if (prev) {
-            prev->next = block->next;
-        }
-        else {
-            gBinList[index] = block->next;
-        }
-    }
-
     return block;
 }
 
-static MemBlock *bin_find_free_block_and_erase(size_t size)
+static ListHead *bin_find_free_block(size_t size)
 {
     size_t index = bin_index_from_size(size);
     auto block = gBinList[index];
 
     if (block) {
         if (index == kBinHugeIndex) {
-            block = bin_erase_find(index, size);
+            block = bin_find(index, size);
         }
     }
     else {
         for (size_t i = index; i <= kBinHugeIndex && !block; ++i) {
-            block = bin_erase_find(i, size);
+            block = bin_find(i, size);
         }
     }
 
@@ -379,24 +369,22 @@ static MemBlock *bin_find_free_block_and_erase(size_t size)
 static void *mem_block_place(void *block, size_t sz)
 {
     size_t cur_size = mem_block_size(block);
+    size_t remain = cur_size - sz;
 
-    if ((cur_size - sz) > kOverheadSize * 2) {
+    if (remain >= kOverheadSize * 2) {
+        remain -= kOverheadSize;
         mem_block_put_to_header(block, sz, kBlockAllocated);
         mem_block_put_to_footer(block, sz, kBlockAllocated);
         auto next = mem_block_next(block);
-        mem_block_put_to_header(next, cur_size - sz - kOverheadSize, kBlockFree);
-        mem_block_put_to_footer(next, cur_size - sz - kOverheadSize, kBlockFree);
+        mem_block_put_to_header(next, remain, kBlockFree);
+        mem_block_put_to_footer(next, remain, kBlockFree);
         return block;
     }
-    else {
+    else if (cur_size == sz) {
         mem_block_put_to_header(block, sz, kBlockAllocated);
         mem_block_put_to_footer(block, sz, kBlockAllocated);
         return block;
     }
-    /* else {
-         ALOGD("%s(): cur_size is %zu size is %zu. Ignore request\n",
-               __func__, cur_size, sz);
-     }*/
 
     return nullptr;
 }
@@ -415,8 +403,8 @@ static void *mem_block_merge(void *ptr)
 
     else if (prev_allocated && !next_allocated) {
         size += mem_block_size(next) + kOverheadSize;
-        void *footer = mem_block_footer(ptr);
         mem_block_put_to_header(ptr, size, kBlockFree);
+        void *footer = mem_block_footer(ptr);
         mem_block_pack(footer, size, kBlockFree);
     }
 
@@ -445,7 +433,7 @@ static size_t mem_block_aligned_size(size_t size)
 {
     size_t aligned_size = 0;
 
-    if (size <= kPointerSize) {
+    if (size <= kOverheadSize) {
         aligned_size = kOverheadSize;
     }
     else {
@@ -460,13 +448,13 @@ static void *mem_block_erase_merge(void *block)
     auto current = mem_block_prev(block);
 
     if (mem_block_is_free(current)) {
-        bin_erase(MemBlock::place(current));
+        bin_erase(current);
     }
 
     current = mem_block_next(block);
 
     if (mem_block_is_free(current)) {
-        bin_erase(MemBlock::place(current));
+        bin_erase(current);
     }
 
     return mem_block_merge(block);
@@ -479,26 +467,30 @@ void *mem_malloc(size_t size)
     if (gMemStart) {
         if (size > 0) {
             size_t aligned_size = mem_block_aligned_size(size);
-            auto memoryBlock = bin_find_free_block_and_erase(aligned_size);
+            auto memoryBlock = bin_find_free_block(aligned_size);
             bool blockFromBin = memoryBlock;
 
             if (!memoryBlock) {
                 memoryBlock = free_list_find_first_fit(gFreeList, aligned_size);
-
-                if (memoryBlock) {
-                    gFreeList = free_list_erase(gFreeList, memoryBlock);
-                }
             }
 
             if (memoryBlock) {
-                block = memoryBlock->toBlock();
+                block = memoryBlock;
 
-                if (block != nullptr) {
-                    block = mem_block_place(block, aligned_size);
+                if (blockFromBin) {
+                    bin_erase(block);
+                }
+                else {
+                    gFreeList = free_list_erase(gFreeList, memoryBlock);
+                }
+
+                block = mem_block_place(block, aligned_size);
+
+                if (block) {
                     auto next = mem_block_next(block);
 
-                    if (next && mem_block_is_free(next)) {
-                        auto nextBlock = MemBlock::createWithNullNext(next);
+                    if (next < gMemEnd && next > gMemStart && mem_block_is_free(next)) {
+                        auto nextBlock = mem_block_list_head(next);
 
                         if (blockFromBin) {
                             bin_insert(nextBlock);
@@ -508,10 +500,6 @@ void *mem_malloc(size_t size)
                         }
                     }
                 }
-            }
-            else {
-                ALOGE("Out of memory on allocation request with size %zu aligned size %zu", size, aligned_size);
-                errno = ENOMEM;
             }
         }
         else {
@@ -541,58 +529,17 @@ void *mem_calloc(size_t num, size_t size)
 
 void *mem_realloc(void *p, size_t new_sz)
 {
-    if (p) {
-        if (new_sz > 0) {
-            size_t size = mem_block_size(p);
-
-            if (new_sz != size) {
-                void *newBlock = nullptr;
-
-                /*if (new_sz < size) {
-                    mem_block_init_block(p, size, kBlockFree);
-                    newBlock = mem_block_erase_merge(p);
-                    auto aligned_size = mem_block_aligned_size(new_sz);
-                    auto newBlockSize = mem_block_size(newBlock);
-                    ALOGD("block (%p) size %zu newBlock (%p) size %zu", p, size, newBlock, newBlockSize);
-
-                    if (newBlockSize >= aligned_size) {
-                        newBlock = mem_block_place(newBlock, aligned_size);
-                        auto next = mem_block_next(newBlock);
-
-                        if (mem_block_is_free(next)) {
-                            bin_insert(MemBlock::createWithNullNext(next));
-                        }
-
-                        if (newBlock && newBlock != p) {
-                            return memmove(newBlock, p, size);
-                        }
-
-                        return p;
-                    }
-                }*/
-
-                //ALOGD("new_sz %zu aligned size %zu size %zu", new_sz, mem_block_aligned_size(new_sz), size);
-                newBlock = mem_malloc(new_sz);
-                if (newBlock) {
-                    memmove(newBlock, p, std::min(size, new_sz));
-                    mem_free(p);
-                    return newBlock;
-                }
-            }
-            else {
-                ALOGD("new size is equal to current size. do nothing");
-            }
-        }
-        else {
-            ALOGE("Wrong size %zu", new_sz);
-            errno = EINVAL;
-        }
-    }
-    else {
+    if (!p) {
         return mem_malloc(new_sz);
     }
 
-    return nullptr;
+    auto block = mem_malloc(new_sz);
+
+    if (block) {
+        memmove(block, p, std::min(new_sz, mem_block_size(p)));
+    }
+
+    return block;
 }
 
 void mem_free(void *ptr)
@@ -601,7 +548,7 @@ void mem_free(void *ptr)
         size_t size = mem_block_size(ptr);
         mem_block_init_block(ptr, size, kBlockFree);
         ptr = mem_block_erase_merge(ptr);
-        bin_insert(MemBlock::createWithNullNext(ptr));
+        bin_insert(mem_block_list_head(ptr));
     }
     else {
         ALOGE("%s(): Invalid pointer (%p)\n", __func__, ptr);
@@ -610,24 +557,28 @@ void mem_free(void *ptr)
 
 int mem_initialize(void *base, size_t size)
 {
-    if (base && size > 0) {
+    if (base && size > 0 && (size % 2 == 0)) {
         size_t binsSize = kBinCount * sizeof(void *);
 
         if (size > binsSize) {
+            gMemStart = mem_block_char_ptr(base);
+#if 0
             gMemStart = mem_block_char_ptr(base) + binsSize;
             size -= binsSize;
-            gBinList = reinterpret_cast<MemBlock **>(base);
-            memset(gBinList, 0, binsSize);
+            gBinList = reinterpret_cast<ListHead **>(base);
             ALOGD("gBinList %p binsSize %zu gMemStart %p", gBinList, binsSize, gMemStart);
-            mem_block_pack(gMemStart, 0, kBlockAllocated);
-            mem_block_pack(mem_block_char_ptr(gMemStart) + kHeaderSize, 0, kBlockAllocated);
-            size_t heapSize = size - (kOverheadSize * 3);
+#endif
+            memset(gBinList, 0, binsSize);
+            mem_block_pack(gMemStart, kOverheadSize, kBlockAllocated);
+            mem_block_pack(gMemStart + kHeaderSize + kOverheadSize, kOverheadSize, kBlockAllocated);
+            size_t heapSize = size - (kOverheadSize * 5);
             void *heap = mem_block_next(mem_block_user_ptr(gMemStart));
             mem_block_init_block(heap, heapSize, kBlockFree);
             gMemEnd = mem_block_char_ptr(mem_block_next(heap)) - kHeaderSize;
-            mem_block_pack(gMemEnd, 0, kBlockAllocated);
-            mem_block_pack(mem_block_char_ptr(gMemEnd) + kHeaderSize, 0, kBlockAllocated);
-            gFreeList = free_list_insert(MemBlock::createWithNullNext(heap));
+            mem_block_pack(gMemEnd, kOverheadSize, kBlockAllocated);
+            mem_block_pack(gMemEnd + kOverheadSize + kHeaderSize, kOverheadSize, kBlockAllocated);
+            auto firstBlock = mem_block_list_head(heap);
+            gFreeList = free_list_insert(firstBlock);
             return 0;
         }
     }
@@ -700,18 +651,18 @@ void dump_mem()
     ALOGD("total free blocks          %12zu", total_free_blocks);
 }
 
-static size_t dump_list(MemBlock *list, size_t index = 0)
+static size_t dump_list(ListHead *list, size_t index = 0)
 {
     size_t count = 0;
     auto ptr = list;
 
     while (ptr) {
         ++count;
-        void *block = &ptr->next;
-        ALOGD("block %p size %zu size with overhead %zu mem bin[%zu]",
+        void *block = ptr;
+        ALOGD("block %p size %zu size with overhead %zu mem bin[%zu] next addr %p",
               block,
               mem_block_size(block),
-              mem_block_size_with_overhead(block), index);
+              mem_block_size_with_overhead(block), index, ptr->next);
         ptr = ptr->next;
     }
 
