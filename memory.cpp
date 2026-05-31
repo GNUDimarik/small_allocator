@@ -70,25 +70,12 @@ _Node *__free_list_insert_sorted(_Node *head,
 
     block->next = cursor->next;
     cursor->next = block;
-    return head;
-}
+    block->prev = cursor;
 
-template<typename _Node>
-_Node *free_list_erase(_Node *head, _Node *block)
-{
-    if (head == block) {
-        return head->next;
+    if (cursor->next) {
+        cursor->next->prev = block;
     }
 
-    auto cursor = head;
-    auto prev = cursor;
-
-    while (cursor && cursor != block) {
-        prev = cursor;
-        cursor = cursor->next;
-    }
-
-    prev->next = block->next;
     return head;
 }
 
@@ -203,14 +190,18 @@ static inline size_t mem_block_size_with_overhead(void *ptr)
 struct ListHead
 {
     ListHead *next = nullptr;
+    ListHead *prev = nullptr;
 };
 
 static inline ListHead *mem_block_list_head(void *ptr)
 {
     auto head = new(ptr) ListHead;
     head->next = nullptr;
+    head->prev = nullptr;
     return head;
 }
+
+static void mem_block_print(void *ptr, const char *func) __attribute__((unused));
 
 static void mem_block_print(void *ptr, const char *func)
 {
@@ -245,8 +236,8 @@ _Node *free_list_insert_sorted_by_size(_Node *head,
 }
 
 template<typename _Node>
-_Node *free_list_insert_sorted_by_addr(_Node *head,
-                                       _Node *block)
+_Node *free_list_prepend(_Node *head,
+                         _Node *block)
 {
     block->next = nullptr;
 
@@ -255,9 +246,8 @@ _Node *free_list_insert_sorted_by_addr(_Node *head,
     }
 
     if (head != block) {
-        auto cmp = [](_Node *first, _Node *second)
-        { return first < second; };
-        return __free_list_insert_sorted<_Node, decltype(cmp)>(head, block, cmp);
+        block->next = head;
+        head->prev = block;
     }
 
     return block;
@@ -284,7 +274,7 @@ _Node *bin_insert(_Node *block)
     size_t index = mem_block_size(block);
 
     if (index < kBinHugeIndex) {
-        gBinList[index] = free_list_insert_sorted_by_addr(gBinList[index], block);
+        gBinList[index] = free_list_prepend(gBinList[index], block);
     }
     else {
         gBinList[kBinHugeIndex] = free_list_insert_sorted_by_size(gBinList[kBinHugeIndex], block);
@@ -302,37 +292,35 @@ static size_t bin_index_from_size(size_t size)
     return kBinHugeIndex;
 }
 
+static ListHead *list_erase(ListHead *head)
+{
+    auto prev = head->prev;
+    auto next = head->next;
+
+    if (prev) {
+        prev->next = next;
+    }
+
+    if (next) {
+        next->prev = prev;
+    }
+
+    return next;
+}
+
 static void bin_erase(void *block)
 {
+    auto *head = reinterpret_cast<ListHead *>(block);
     size_t index = bin_index_from_size(mem_block_size(block));
-    auto bin = gBinList[index];
+    list_erase(head);
 
-    if (bin) {
-        ListHead *prev = nullptr;
-
-        while (bin) {
-            if (bin == block) {
-                break;
-            }
-
-            prev = bin;
-            bin = bin->next;
-        }
-
-        if (bin) {
-            if (prev) {
-                prev->next = bin->next;
-            }
-            else {
-                gBinList[index] = bin->next;
-            }
-        }
+    if (gBinList[index] == head) {
+        gBinList[index] = head->next;
     }
 }
 
 static ListHead *bin_find(size_t index, size_t size)
 {
-    ListHead *prev = nullptr;
     auto block = gBinList[index];
 
     while (block) {
@@ -340,7 +328,6 @@ static ListHead *bin_find(size_t index, size_t size)
             break;
         }
 
-        prev = block;
         block = block->next;
     }
 
@@ -442,7 +429,7 @@ static size_t mem_block_aligned_size(size_t size)
 
     return aligned_size;
 }
-// TODO
+
 static void *mem_block_erase_merge(void *block)
 {
     auto current = mem_block_prev(block);
@@ -481,7 +468,7 @@ void *mem_malloc(size_t size)
                     bin_erase(block);
                 }
                 else {
-                    gFreeList = free_list_erase(gFreeList, memoryBlock);
+                    gFreeList = list_erase(memoryBlock);
                 }
 
                 block = mem_block_place(block, aligned_size);
@@ -659,10 +646,10 @@ static size_t dump_list(ListHead *list, size_t index = 0)
     while (ptr) {
         ++count;
         void *block = ptr;
-        ALOGD("block %p size %zu size with overhead %zu mem bin[%zu] next addr %p",
+        ALOGD("block %p size %zu size with overhead %zu mem bin[%zu] prev addr %p next addr %p",
               block,
               mem_block_size(block),
-              mem_block_size_with_overhead(block), index, ptr->next);
+              mem_block_size_with_overhead(block), index, ptr->prev, ptr->next);
         ptr = ptr->next;
     }
 

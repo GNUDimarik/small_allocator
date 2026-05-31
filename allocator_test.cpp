@@ -167,8 +167,9 @@ TEST(CallocTest, LargeAllocation)
     // Проверяем несколько случайных байтов, а не все 10 MiB
     for (size_t i = 0; i < 1000; ++i) {
         size_t offset = i * 1024; // каждый килобайт
-        if (offset < snum * size)
+        if (offset < snum * size) {
             EXPECT_EQ(bytes[offset], 0);
+        }
     }
     mem_free(p);
 }
