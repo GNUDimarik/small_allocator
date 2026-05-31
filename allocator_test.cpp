@@ -14,7 +14,7 @@
 static bool is_aligned_to_max_align(void *ptr)
 {
     std::uintptr_t addr = reinterpret_cast<std::uintptr_t>(ptr);
-    return addr % alignof(sizeof(void *)) == 0;
+    return addr % sizeof(void *) == 0;
 }
 
 // ----------------------------------------------------------------------
@@ -40,7 +40,6 @@ TEST(MallocTest, AllocMax)
 
 TEST(MallocTest, MultipleAllocationsNoOverlap)
 {
-    dump_mem();
     const size_t N = 100;
     std::vector<void *> ptrs;
     for (size_t i = 0; i < N; ++i) {
@@ -48,13 +47,13 @@ TEST(MallocTest, MultipleAllocationsNoOverlap)
         ASSERT_NE(p, nullptr);
         ptrs.push_back(p);
     }
-    dump_mem();
+
     for (size_t i = 0; i < N; ++i) {
         for (size_t j = i + 1; j < N; ++j) {
             EXPECT_NE(ptrs[i], ptrs[j]);
         }
     }
-    dump_mem();
+
     for (void *p: ptrs) {
         mem_free(p);
     }
@@ -101,13 +100,11 @@ TEST(CallocTest, ZeroSizeArguments)
 
 TEST(CallocTest, OverflowDetection)
 {
-    dump_mem();
 // Переполнение при умножении snum * size должно вернуть NULL
     size_t snum = std::numeric_limits<size_t>::max() / 2 + 1;
     size_t size = 2;
     void *p = mem_calloc(snum, size);
     EXPECT_EQ(p, nullptr);
-    dump_mem();
 }
 
 TEST(CallocTest, LargeAllocation)
@@ -181,7 +178,6 @@ TEST(ReallocTest, PreserveDataOnGrow)
 
 TEST(ReallocTest, PreserveDataOnShrink)
 {
-    dump_mem();
     const size_t old_sz = 20, new_sz = 5;
     void *p = mem_malloc(old_sz);
     ASSERT_NE(p, nullptr);
@@ -194,7 +190,6 @@ TEST(ReallocTest, PreserveDataOnShrink)
         EXPECT_EQ(cp[i], static_cast<char>(i)) << "data lost at index " << i;
     }
     mem_free(p2);
-    dump_mem();
 }
 
 TEST(ReallocTest, DataPreservedOnMove)
@@ -222,7 +217,6 @@ TEST(ReallocTest, SamePointerOnShrink)
     ASSERT_NE(p2, nullptr);
 // Не проверяем равенство, просто освобождаем
     mem_free(p2);
-    dump_mem();
 }
 
 TEST(ReallocTest, ReallocAfterFreeIsUB)
@@ -291,13 +285,10 @@ TEST(CombinedTest, RepeatedAllocations)
 // Выделяем и освобождаем много раз – проверяем стабильность и отсутствие утечек
     for (int iter = 0; iter < 1000; ++iter) {
         void *p1 = mem_malloc(rand() % 1024 + 1);
-        dump_mem();
         if (p1) {
             void *p2 = mem_realloc(p1, rand() % 2048 + 1);
-            dump_mem();
             if (p2) {
                 void *p3 = mem_calloc(rand() % 100 + 1, 8);
-                dump_mem();
 
                 if (p3) {
                     mem_free(p3);
@@ -350,7 +341,7 @@ TEST(AlignmentTest, ReallocAlignment)
 // main для запуска тестов
 // ----------------------------------------------------------------------
 
-#define HEAP_SIZE (4096 + 1000000 + 2048)
+#define HEAP_SIZE (4096 + 1000000)
 
 int main(int argc, char **argv)
 {

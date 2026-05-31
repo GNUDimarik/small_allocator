@@ -2,7 +2,6 @@
 #include <errno.h>
 #include <string.h>
 #include <functional>
-#include <cassert>
 
 #include "memory.h"
 
@@ -545,21 +544,19 @@ void *mem_malloc(size_t size)
                     gFreeList = free_list_erase(gFreeList, memoryBlock);
                 }
 
-                if (block != nullptr) {
-                    block = mem_block_place(block, aligned_size);
+                block = mem_block_place(block, aligned_size);
 
-                    if (block) {
-                        auto next = mem_block_next(block);
+                if (block) {
+                    auto next = mem_block_next(block);
 
-                        if (next < gMemEnd && next > gMemStart && mem_block_is_free(next)) {
-                            auto nextBlock = mem_block_list_head(next);
+                    if (next < gMemEnd && next > gMemStart && mem_block_is_free(next)) {
+                        auto nextBlock = mem_block_list_head(next);
 
-                            if (blockFromBin) {
-                                bin_insert(nextBlock);
-                            }
-                            else {
-                                gFreeList = free_list_insert(nextBlock);
-                            }
+                        if (blockFromBin) {
+                            bin_insert(nextBlock);
+                        }
+                        else {
+                            gFreeList = free_list_insert(nextBlock);
                         }
                     }
                 }
@@ -625,7 +622,7 @@ void mem_free(void *ptr)
     if (ptr != nullptr && mem_block_is_allocated(ptr)) {
         size_t size = mem_block_size(ptr);
         mem_block_init_block(ptr, size, kBlockFree);
-        //ptr = mem_block_erase_merge(ptr);
+        ptr = mem_block_erase_merge(ptr);
         bin_insert(mem_block_list_head(ptr));
     }
     else {
