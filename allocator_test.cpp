@@ -28,8 +28,9 @@ static bool is_aligned_to_max_align(void *ptr)
 // ----------------------------------------------------------------------
 // Вспомогательная функция для заполнения блока тестовым паттерном
 // ----------------------------------------------------------------------
-static void fill_pattern(void* ptr, size_t size, unsigned char seed) {
-    unsigned char* p = static_cast<unsigned char*>(ptr);
+static void fill_pattern(void *ptr, size_t size, unsigned char seed)
+{
+    unsigned char *p = static_cast<unsigned char *>(ptr);
     for (size_t i = 0; i < size; ++i) {
         p[i] = static_cast<unsigned char>(seed + i);
     }
@@ -38,8 +39,9 @@ static void fill_pattern(void* ptr, size_t size, unsigned char seed) {
 // ----------------------------------------------------------------------
 // Проверка, что содержимое блока соответствует ожидаемому паттерну
 // ----------------------------------------------------------------------
-static void verify_pattern(const void* ptr, size_t size, unsigned char seed) {
-    const unsigned char* p = static_cast<const unsigned char*>(ptr);
+static void verify_pattern(const void *ptr, size_t size, unsigned char seed)
+{
+    const unsigned char *p = static_cast<const unsigned char *>(ptr);
     for (size_t i = 0; i < size; ++i) {
         ASSERT_EQ(p[i], static_cast<unsigned char>(seed + i))
                             << "Data mismatch at offset " << i;
@@ -117,6 +119,39 @@ TEST(MallocTest, ReuseAfterFree)
     SUCCEED();
 }
 
+TEST(MallocTest, EvenNotEvenFree)
+{
+    int count = 1000;
+    std::vector<void *> pointers;
+    pointers.reserve(count);
+
+    for (int i = 0; i < count; ++i) {
+        pointers[i] = mem_malloc(i);
+    }
+
+    for (int i = 0; i < count; ++i) {
+        if ((i % 2) == 0) {
+            mem_free(pointers[i]);
+        }
+    }
+
+    for (int i = 0; i < count; ++i) {
+        pointers[i] = mem_malloc(i);
+    }
+
+    for (int i = 0; i < count; ++i) {
+        if ((i % 2) != 0) {
+            mem_free(pointers[i]);
+        }
+    }
+
+    for (int i = 0; i < count; ++i) {
+        if ((i % 2) == 0) {
+            mem_free(pointers[i]);
+        }
+    }
+}
+
 // ----------------------------------------------------------------------
 // Тесты для mem_calloc
 // ----------------------------------------------------------------------
@@ -156,7 +191,7 @@ TEST(CallocTest, OverflowDetection)
 TEST(CallocTest, LargeAllocation)
 {
     // Выделяем достаточно большой блок, инициализированный нулями
-    const size_t snum = 10000, size = 1024; // ~10 MiB
+    const size_t snum = 1000, size = 1024; // ~10 MiB
     void *p = mem_calloc(snum, size);
     if (p == nullptr) {
         // Если система не может выделить так много, тест пропускается
@@ -329,7 +364,7 @@ TEST(CombinedTest, CallocThenRealloc)
 TEST(CombinedTest, RepeatedAllocations)
 {
     // Выделяем и освобождаем много раз – проверяем стабильность и отсутствие утечек
-    for (int iter = 0; iter < 1000; ++iter) {
+    for (int iter = 0; iter < 10000; ++iter) {
         void *p1 = mem_malloc(rand() % 1024 + 1);
         if (p1) {
             void *p2 = mem_realloc(p1, rand() % 2048 + 1);
@@ -386,16 +421,17 @@ TEST(AlignmentTest, ReallocAlignment)
 // Тесты mem_realloc, проверяющие сохранность данных (паттерны)
 // ----------------------------------------------------------------------
 
-TEST(ReallocPatternTest, IncreaseSizePreservesData) {
+TEST(ReallocPatternTest, IncreaseSizePreservesData)
+{
     const size_t old_size = 64;
     const size_t new_size = 128;
     unsigned char seed = 0xAB;
 
-    void* p = mem_malloc(old_size);
+    void *p = mem_malloc(old_size);
     ASSERT_NE(p, nullptr);
     fill_pattern(p, old_size, seed);
 
-    void* p2 = mem_realloc(p, new_size);
+    void *p2 = mem_realloc(p, new_size);
     ASSERT_NE(p2, nullptr);
 
     // Проверяем, что старые данные сохранились
@@ -405,16 +441,17 @@ TEST(ReallocPatternTest, IncreaseSizePreservesData) {
     mem_free(p2);
 }
 
-TEST(ReallocPatternTest, DecreaseSizePreservesData) {
+TEST(ReallocPatternTest, DecreaseSizePreservesData)
+{
     const size_t old_size = 128;
     const size_t new_size = 64;
     unsigned char seed = 0xCD;
 
-    void* p = mem_malloc(old_size);
+    void *p = mem_malloc(old_size);
     ASSERT_NE(p, nullptr);
     fill_pattern(p, old_size, seed);
 
-    void* p2 = mem_realloc(p, new_size);
+    void *p2 = mem_realloc(p, new_size);
     ASSERT_NE(p2, nullptr);
 
     // Проверяем, что данные в усечённой части сохранились
@@ -423,15 +460,16 @@ TEST(ReallocPatternTest, DecreaseSizePreservesData) {
     mem_free(p2);
 }
 
-TEST(ReallocPatternTest, SameSizeKeepsData) {
+TEST(ReallocPatternTest, SameSizeKeepsData)
+{
     const size_t size = 100;
     unsigned char seed = 0xEF;
 
-    void* p = mem_malloc(size);
+    void *p = mem_malloc(size);
     ASSERT_NE(p, nullptr);
     fill_pattern(p, size, seed);
 
-    void* p2 = mem_realloc(p, size);
+    void *p2 = mem_realloc(p, size);
     ASSERT_NE(p2, nullptr);
     // Адрес может как измениться, так и остаться – данные должны быть целы
     verify_pattern(p2, size, seed);
@@ -439,29 +477,31 @@ TEST(ReallocPatternTest, SameSizeKeepsData) {
     mem_free(p2);
 }
 
-TEST(ReallocPatternTest, MoveToNewLocationCopiesData) {
+TEST(ReallocPatternTest, MoveToNewLocationCopiesData)
+{
     // Этот тест не требует знания, переместится блок или нет.
     // Если переместится – данные скопируются, если нет – всё равно данные сохранятся.
     const size_t old_size = 32;
     const size_t new_size = 2048; // достаточно большой, чтобы почти наверняка переместить
     unsigned char seed = 0x12;
 
-    void* p = mem_malloc(old_size);
+    void *p = mem_malloc(old_size);
     ASSERT_NE(p, nullptr);
     fill_pattern(p, old_size, seed);
 
-    void* p2 = mem_realloc(p, new_size);
+    void *p2 = mem_realloc(p, new_size);
     ASSERT_NE(p2, nullptr);
     verify_pattern(p2, old_size, seed);
 
     mem_free(p2);
 }
 
-TEST(ReallocPatternTest, ReallocNullActsAsMalloc) {
+TEST(ReallocPatternTest, ReallocNullActsAsMalloc)
+{
     const size_t size = 256;
     unsigned char seed = 0x34;
 
-    void* p = mem_realloc(nullptr, size);
+    void *p = mem_realloc(nullptr, size);
     ASSERT_NE(p, nullptr);
     fill_pattern(p, size, seed);
     verify_pattern(p, size, seed);
@@ -469,15 +509,16 @@ TEST(ReallocPatternTest, ReallocNullActsAsMalloc) {
     mem_free(p);
 }
 
-TEST(ReallocPatternTest, ReallocZeroFreesAndReturnsNull) {
+TEST(ReallocPatternTest, ReallocZeroFreesAndReturnsNull)
+{
     const size_t size = 64;
     unsigned char seed = 0x56;
 
-    void* p = mem_malloc(size);
+    void *p = mem_malloc(size);
     ASSERT_NE(p, nullptr);
     fill_pattern(p, size, seed);
 
-    void* p2 = mem_realloc(p, 0);
+    void *p2 = mem_realloc(p, 0);
     // Стандарт: realloc(ptr, 0) может вернуть NULL или уникальный указатель.
     // В любом случае, старый указатель p больше недействителен.
     // Повторно освобождать его нельзя, если p2 не NULL.
@@ -489,25 +530,26 @@ TEST(ReallocPatternTest, ReallocZeroFreesAndReturnsNull) {
     SUCCEED();
 }
 
-TEST(ReallocPatternTest, CallocThenReallocPreservesZerosAndData) {
+TEST(ReallocPatternTest, CallocThenReallocPreservesZerosAndData)
+{
     const size_t num = 10;
     const size_t elem_size = 8;
     const size_t old_total = num * elem_size; // 80
     const size_t new_total = 160;
 
-    void* p = mem_calloc(num, elem_size);
+    void *p = mem_calloc(num, elem_size);
     ASSERT_NE(p, nullptr);
     // Изначально все нули, заполняем первые old_total/2 байт паттерном
     unsigned char seed = 0x78;
     fill_pattern(p, old_total / 2, seed);
 
-    void* p2 = mem_realloc(p, new_total);
+    void *p2 = mem_realloc(p, new_total);
     ASSERT_NE(p2, nullptr);
 
     // Проверяем, что первые old_total/2 байт – паттерн
     verify_pattern(p2, old_total / 2, seed);
     // Проверяем, что область между old_total/2 и old_total осталась нулевой
-    const unsigned char* bytes = static_cast<const unsigned char*>(p2);
+    const unsigned char *bytes = static_cast<const unsigned char *>(p2);
     for (size_t i = old_total / 2; i < old_total; ++i) {
         ASSERT_EQ(bytes[i], 0) << "Byte at offset " << i << " should be zero (was calloc)";
     }

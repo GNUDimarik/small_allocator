@@ -29,21 +29,23 @@ static constexpr const size_t kFooterSize = kPointerSize;
 
 static constexpr const size_t kOverheadSize = kHeaderSize + kFooterSize;
 
-static constexpr const size_t kMinBlockSize = kPointerSize + kOverheadSize;
-
 static constexpr const size_t kBlockAllocated = 1;
 
 static constexpr const size_t kBlockFree = 0;
 
-static constexpr size_t kBinCount = 256;
+static constexpr const size_t kBinCount = 256;
+
+static constexpr const size_t kHugeBlockMinSize = 256;
 
 static constexpr size_t kBinHugeIndex = kBinCount - 1;
 
-#if 0
+#ifdef BINS_ARE_IN_HEAP
 ListHead **gBinList;
-#endif
+#else
 
 ListHead *gBinList[kBinCount];
+
+#endif
 
 /**
  * Memory block related stuff
@@ -89,9 +91,14 @@ static char *mem_block_footer(void *_p)
     return mem_block_char_ptr(_p) + mem_block_size(_p);
 }
 
+static size_t mem_block_get_alloc(void *p)
+{
+    return (*mem_block_size_t_ptr(p) & 0x01);
+}
+
 static bool mem_block_is_allocated(void *p)
 {
-    return (*mem_block_size_t_ptr(mem_block_header(p)) & 0x01) == kBlockAllocated;
+    return mem_block_get_alloc(mem_block_header(p)) == kBlockAllocated;
 }
 
 static bool mem_block_is_free(void *p)
@@ -143,21 +150,6 @@ static inline ListHead *mem_block_list_head(void *ptr)
     return head;
 }
 
-static void mem_block_print(void *ptr, const char *func) __attribute__((unused));
-
-static void mem_block_print(void *ptr, const char *func)
-{
-    dump_mem();
-    ALOGD("%s: block %p header %d footer %d size %zu allocated %s",
-          func,
-          ptr,
-          *mem_block_header(ptr),
-          *mem_block_footer(ptr),
-          mem_block_size(ptr), mem_block_is_allocated(ptr) ? "yes" : "no");
-}
-
-#define MEM_BLOCK_PRINT(bp) mem_block_print(bp, __func__)
-
 static ListHead *list_erase(ListHead *head)
 {
     auto prev = head->prev;
@@ -171,6 +163,8 @@ static ListHead *list_erase(ListHead *head)
         next->prev = prev;
     }
 
+    head->next = nullptr;
+    head->prev = nullptr;
     return next;
 }
 
@@ -205,7 +199,7 @@ _Node *__free_list_insert_sorted(_Node *head,
 
     auto cursor = head;
 
-    if (cmp(block, cursor) && block != cursor) {
+    if (cmp(block, cursor)) {
         return free_list_prepend(cursor, head);
     }
 
@@ -278,7 +272,6 @@ _Node *free_list_find_first_fit(_Node *head, size_t size)
 template<typename _Node>
 _Node *bin_insert(_Node *block)
 {
-    // Block needs to be free here otherwise size is invalid since allocated bit is set
     size_t index = mem_block_size(block);
 
     if (index < kBinHugeIndex) {
@@ -293,11 +286,11 @@ _Node *bin_insert(_Node *block)
 
 static size_t bin_index_from_size(size_t size)
 {
-    if (size < (kBinCount - 2)) {
-        return size;
+    if (size >= kHugeBlockMinSize) {
+        return kBinHugeIndex;
     }
 
-    return kBinHugeIndex;
+    return size;
 }
 
 static void bin_erase(void *block)
@@ -309,6 +302,9 @@ static void bin_erase(void *block)
     if (gBinList[index] == head) {
         gBinList[index] = head->next;
     }
+
+    head->next = nullptr;
+    head->prev = nullptr;
 }
 
 static ListHead *bin_find(size_t index, size_t size)
@@ -359,13 +355,12 @@ static void *mem_block_place(void *block, size_t sz)
         mem_block_put_to_footer(next, remain, kBlockFree);
         return block;
     }
-    else if (cur_size == sz) {
-        mem_block_put_to_header(block, sz, kBlockAllocated);
-        mem_block_put_to_footer(block, sz, kBlockAllocated);
-        return block;
+    else {
+        mem_block_put_to_header(block, cur_size, kBlockAllocated);
+        mem_block_put_to_footer(block, cur_size, kBlockAllocated);
     }
 
-    return nullptr;
+    return block;
 }
 
 static void *mem_block_merge(void *ptr)
@@ -464,19 +459,16 @@ void *mem_malloc(size_t size)
                 }
 
                 block = mem_block_place(block, aligned_size);
+                auto next = mem_block_next(block);
 
-                if (block) {
-                    auto next = mem_block_next(block);
+                if (next < gMemEnd && next > gMemStart && mem_block_is_free(next)) {
+                    auto nextBlock = mem_block_list_head(next);
 
-                    if (next < gMemEnd && next > gMemStart && mem_block_is_free(next)) {
-                        auto nextBlock = mem_block_list_head(next);
-
-                        if (blockFromBin) {
-                            bin_insert(nextBlock);
-                        }
-                        else {
-                            gFreeList = free_list_insert(nextBlock);
-                        }
+                    if (blockFromBin) {
+                        bin_insert(nextBlock);
+                    }
+                    else {
+                        gFreeList = free_list_insert(nextBlock);
                     }
                 }
             }
@@ -542,7 +534,7 @@ int mem_initialize(void *base, size_t size)
 
         if (size > binsSize) {
             gMemStart = mem_block_char_ptr(base);
-#if 0
+#if BINS_ARE_IN_HEAP
             gMemStart = mem_block_char_ptr(base) + binsSize;
             size -= binsSize;
             gBinList = reinterpret_cast<ListHead **>(base);
@@ -665,4 +657,64 @@ void dump_bins()
 void dump_free_mem()
 {
     dump_list(gFreeList);
+}
+
+static char *mem_print_block_to_str(void *p, char *str)
+{
+    auto header = mem_block_header(p);
+    auto footer = mem_block_footer(p);
+    sprintf(str, "block (%p) header (%p) [%zu:%zu] footer (%p) [%zu:%zu]",
+            p,
+            header,
+            mem_block_get_size(header),
+            mem_block_get_alloc(header),
+            footer,
+            mem_block_get_size(footer),
+            mem_block_get_alloc(footer));
+    return str;
+}
+
+bool mem_check_block(void *p)
+{
+    if (p) {
+        if ((reinterpret_cast<size_t>(p) % kPointerSize) == 0) {
+            if (*mem_block_header(p) == *mem_block_footer(p)) {
+                return true;
+            }
+            else {
+                ALOGE("Bad block. Header and footer are not the same");
+            }
+        }
+        else {
+            ALOGE("Bad block (%p). The address is not aligned by %zu", p, kPointerSize);
+        }
+    }
+    else {
+        ALOGE("Bad block (%p)", p);
+    }
+
+    return false;
+}
+
+bool mem_check(bool verbose)
+{
+    char buffer[256];
+
+    if (gMemStart != nullptr && gMemEnd != nullptr) {
+        for (void *cur_blk = mem_block_user_ptr(gMemStart); cur_blk <= mem_block_user_ptr(gMemEnd);
+             cur_blk = mem_block_next(cur_blk)) {
+            if (verbose) {
+                mem_print_block_to_str(cur_blk, buffer);
+
+                if (!mem_check_block(cur_blk)) {
+                    ALOGD("block %s BAD", buffer);
+                    return false;
+                }
+
+                ALOGD("%s OK", buffer);
+            }
+        }
+    }
+
+    return true;
 }

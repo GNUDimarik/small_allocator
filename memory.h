@@ -14,4 +14,7 @@ void dump_mem();
 void dump_free_mem();
 void dump_bins();
 
+bool mem_check_block(void *p);
+bool mem_check(bool verbose = false);
+
 #endif //MEMORY_H
