@@ -1,5 +1,5 @@
 # Implicit blocks list with boundary tags Knuth algoritm with sorted free blocks list and bins
-Free blocks sorted by size and address
+Free blocks sorted by size in bin with index 255 (blocks > 256 bytes size)
 Size alighment is sizeof(void*) so min block size is 24 byes because it has sizeof(void*) header and footer with the same size and minimum block sie is sizeof(void*)
 
 ### A Block Structure (Allocated or Free):
@@ -44,7 +44,7 @@ The minimum payload size (8 bytes) is exactly enough for a pointer on 64‑bit.
 _________________________________________________________________________________________________________________________________
 | Block size (true size)      | Bin index        | Sorting order                                                                |
 _________________________________________________________________________________________________________________________________
-| < 256 bytes                 | size (exact)     | Sorted by address (ascending)                                                |
+| < 256 bytes                 | size (exact)     | Not sorted                                                                   |
 |                             |                  | → makes coalescing faster when merging adjacent free blocks                  |
 _________________________________________________________________________________________________________________________________
 | >= 256 bytes                | 255              | Sorted by size (descending, largest first)                                   |
@@ -58,7 +58,7 @@ Additional notes:
 - When a block is freed and merged, it is inserted into the appropriate bin according to its new total size.
 
 ### Allocation Algorithm (Priority Order)
-First, search the main free list (implicit list of free blocks sorted by address).
+First, search the main free list.
 If no suitable block is found there, then search the bins (the array of 256 free‑list heads).
 
 ### Why this order?
