@@ -37,7 +37,7 @@ static constexpr const size_t kBinCount = 256;
 
 static constexpr const size_t kHugeBlockMinSize = 256;
 
-static constexpr size_t kBinHugeIndex = kBinCount - 1;
+static constexpr size_t kHugeBinIndex = kBinCount - 1;
 
 #ifdef BINS_ARE_IN_HEAP
 ListHead **gBinList;
@@ -274,11 +274,11 @@ _Node *bin_insert(_Node *block)
 {
     size_t index = mem_block_size(block);
 
-    if (index < kBinHugeIndex) {
+    if (index < kHugeBinIndex) {
         gBinList[index] = free_list_prepend(gBinList[index], block);
     }
     else {
-        gBinList[kBinHugeIndex] = free_list_insert_sorted_by_size(gBinList[kBinHugeIndex], block);
+        gBinList[kHugeBinIndex] = free_list_insert_sorted_by_size(gBinList[kHugeBinIndex], block);
     }
 
     return block;
@@ -287,7 +287,7 @@ _Node *bin_insert(_Node *block)
 static size_t bin_index_from_size(size_t size)
 {
     if (size >= kHugeBlockMinSize) {
-        return kBinHugeIndex;
+        return kHugeBinIndex;
     }
 
     return size;
@@ -328,12 +328,12 @@ static ListHead *bin_find_free_block(size_t size)
     auto block = gBinList[index];
 
     if (block) {
-        if (index == kBinHugeIndex) {
+        if (index == kHugeBinIndex) {
             block = bin_find(index, size);
         }
     }
     else {
-        for (size_t i = index; i <= kBinHugeIndex && !block; ++i) {
+        for (size_t i = index; i <= kHugeBinIndex && !block; ++i) {
             block = bin_find(i, size);
         }
     }

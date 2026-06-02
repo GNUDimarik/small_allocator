@@ -36,6 +36,8 @@ int main()
         vptr[i] = char_alloc(i);
     }
 
+    mem_check(true);
+
     for (int i = 0; i < ITEMS_NUMBER; ++i) {
         if ((i % 2) == 0) {
             mem_free(vptr[i]);
@@ -44,5 +46,16 @@ int main()
 
     dump_mem();
     dump_bins();
+    mem_check(true);
+
+    for (int i = 0; i < ITEMS_NUMBER; ++i) {
+        if ((i % 2) != 0) {
+            mem_free(vptr[i]);
+        }
+    }
+
+    dump_mem();
+    dump_bins();
+    mem_check(true);
     return 0;
 }
