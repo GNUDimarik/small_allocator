@@ -355,10 +355,9 @@ static void *mem_block_place(void *block, size_t sz)
         mem_block_put_to_footer(next, remain, kBlockFree);
         return block;
     }
-    else {
-        mem_block_put_to_header(block, cur_size, kBlockAllocated);
-        mem_block_put_to_footer(block, cur_size, kBlockAllocated);
-    }
+
+    mem_block_put_to_header(block, cur_size, kBlockAllocated);
+    mem_block_put_to_footer(block, cur_size, kBlockAllocated);
 
     return block;
 }

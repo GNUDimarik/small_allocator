@@ -3,7 +3,7 @@
 
 #include <stddef.h>
 
-int mem_initialize(void *__base, size_t __size);
+int mem_initialize(void *_base, size_t _size);
 void mem_unuinitialize();
 void *mem_malloc(size_t _size);
 void *mem_calloc(size_t snum, size_t size);
