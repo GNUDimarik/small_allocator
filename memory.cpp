@@ -1,7 +1,5 @@
-#include <stdint.h>
 #include <errno.h>
 #include <string.h>
-#include <functional>
 
 #include "memory.h"
 
@@ -9,13 +7,20 @@
 #define LOG_TAG "memory"
 #include "logging.h"
 
+#ifndef min
+#define min(a, b)             \
+({                           \
+    __typeof__ (a) _a = (a); \
+    __typeof__ (b) _b = (b); \
+    _a < _b ? _a : _b;       \
+})
+#endif
+
 struct ListHead
 {
     ListHead *next = nullptr;
     ListHead *prev = nullptr;
 };
-
-ListHead *gFreeList;
 
 char *gMemStart{};
 
@@ -146,7 +151,7 @@ static inline size_t mem_block_size_with_overhead(void *ptr)
 
 static inline ListHead *mem_block_list_head(void *ptr)
 {
-    auto head = new(ptr) ListHead;
+    auto head = reinterpret_cast<ListHead *>(ptr);
     head->next = nullptr;
     head->prev = nullptr;
     return head;
@@ -255,20 +260,6 @@ _Node *free_list_insert_sorted_by_size(_Node *head,
     }
 
     return block;
-}
-
-template<typename _Node>
-_Node *free_list_insert(_Node *block)
-{
-    return free_list_insert_sorted_by_size(gFreeList, block);
-}
-
-template<typename _Node>
-_Node *free_list_find_first_fit(_Node *head, size_t size)
-{
-    auto cmp = [](_Node *block, size_t size)
-    { return mem_block_size(block) >= size; };
-    return __free_list_find_first_fit(head, size, cmp);
 }
 
 template<typename _Node>
@@ -445,32 +436,15 @@ void *mem_malloc(size_t size)
             auto memoryBlock = bin_find_free_block(aligned_size);
             bool blockFromBin = memoryBlock;
 
-            if (!memoryBlock) {
-                memoryBlock = free_list_find_first_fit(gFreeList, aligned_size);
-            }
-
             if (memoryBlock) {
                 block = memoryBlock;
-
-                if (blockFromBin) {
-                    bin_erase(block);
-                }
-                else {
-                    gFreeList = list_erase(memoryBlock);
-                }
-
+                bin_erase(block);
                 block = mem_block_place(block, aligned_size);
                 auto next = mem_block_next(block);
 
                 if (next < gMemEnd && next > gMemStart && mem_block_is_free(next)) {
                     auto nextBlock = mem_block_list_head(next);
-
-                    if (blockFromBin) {
-                        bin_insert(nextBlock);
-                    }
-                    else {
-                        gFreeList = free_list_insert(nextBlock);
-                    }
+                    bin_insert(nextBlock);
                 }
             }
         }
@@ -508,7 +482,7 @@ void *mem_realloc(void *p, size_t new_sz)
     auto block = mem_malloc(new_sz);
 
     if (block) {
-        memmove(block, p, std::min(new_sz, mem_block_size(p)));
+        memmove(block, p, min(new_sz, mem_block_size(p)));
         mem_free(p);
     }
 
@@ -551,7 +525,7 @@ int mem_initialize(void *base, size_t size)
             mem_block_pack(gMemEnd, kOverheadSize, kBlockAllocated);
             mem_block_pack(gMemEnd + kOverheadSize + kHeaderSize, kOverheadSize, kBlockAllocated);
             auto firstBlock = mem_block_list_head(heap);
-            gFreeList = free_list_insert(firstBlock);
+            bin_insert(firstBlock);
             return 0;
         }
     }
@@ -653,11 +627,6 @@ void dump_bins()
     }
 
     ALOGD("Total free blocks in all bins %zu", count);
-}
-
-void dump_free_mem()
-{
-    dump_list(gFreeList);
 }
 
 static char *mem_print_block_to_str(void *p, char *str)
