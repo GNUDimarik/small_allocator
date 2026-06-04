@@ -39,6 +39,8 @@ static constexpr const size_t kHugeBlockMinSize = 256;
 
 static constexpr size_t kHugeBinIndex = kBinCount - 1;
 
+static constexpr size_t kMaxMessageLen = 256;
+
 #ifdef BINS_ARE_IN_HEAP
 ListHead **gBinList;
 #else
@@ -596,9 +598,9 @@ void dump_mem()
 
             ALOGD(format, cur_blk,
                   blk_size, blk_size_with_overhead,
-                  is_allocated == kBlockAllocated ? "allocated" : "free");
+                  is_allocated ? "allocated" : "free");
 
-            if (is_allocated == kBlockAllocated) {
+            if (is_allocated) {
                 ++total_allocated_blocks;
             }
             else {
@@ -697,7 +699,7 @@ bool mem_check_block(void *p)
 
 bool mem_check(bool verbose)
 {
-    char buffer[256];
+    char buffer[kMaxMessageLen];
 
     if (gMemStart != nullptr && gMemEnd != nullptr) {
         for (void *cur_blk = mem_block_user_ptr(gMemStart); cur_blk <= mem_block_user_ptr(gMemEnd);
