@@ -25,7 +25,66 @@
 #ifndef MEMORY_H
 #define MEMORY_H
 
+/* stddef.h Should be provided by an empty compiler if you built it for osdev */
 #include <stddef.h>
+
+#if defined(__HAVE_ERRNO_H__)
+#include <errno.h>
+#else
+#   define EINVAL 22
+#endif
+
+#if defined(__HAVE_STRING_H__)
+#include <string.h>
+#else
+static void *memset(void *dest, int value, size_t length)
+{
+    auto *p = static_cast<unsigned char *> (dest);
+
+    while (length-- > 0) {
+        *p++ = (unsigned char) value;
+    }
+
+    return dest;
+}
+
+static void *memmove(void *dest, const void *src, size_t length)
+{
+    auto *d = static_cast<unsigned char *> (dest);
+    auto *s = static_cast<const unsigned char *> (src);
+
+    if (s >= d) {
+        /* copy forward */
+        while (length-- > 0) {
+            *d++ = *s++;
+        }
+    }
+    else if (s <= d) {
+        /* copy backward */
+        d += length;
+        s += length;
+
+        while (length-- > 0) {
+            *--d = *--s;
+        }
+    }
+
+    return dest;
+}
+#endif
+
+#if defined(__HAVE_CONFIG_H__)
+#include <config.h>
+#else
+#   ifndef min
+#       define min(a, b)             \
+        ({                           \
+            __typeof__ (a) _a = (a); \
+            __typeof__ (b) _b = (b); \
+            _a < _b ? _a : _b;       \
+        })
+#   endif
+#endif
 
 int mem_initialize(void *base, size_t size);
 void mem_unuinitialize();

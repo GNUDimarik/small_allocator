@@ -22,23 +22,11 @@
  * THE SOFTWARE.
  */
 
-#include <errno.h>
-#include <string.h>
-
 #include "memory.h"
 
 // #define LOG_NDEBUG 1
 #define LOG_TAG "memory"
 #include "logging.h"
-
-#ifndef min
-#define min(a, b)             \
-({                           \
-    __typeof__ (a) _a = (a); \
-    __typeof__ (b) _b = (b); \
-    _a < _b ? _a : _b;       \
-})
-#endif
 
 struct ListHead
 {
@@ -249,24 +237,6 @@ _Node *__free_list_insert_sorted(_Node *head,
     return head;
 }
 
-template<typename _Node, typename _Cmp>
-_Node *__free_list_find_first_fit(_Node *head,
-                                  size_t size,
-                                  _Cmp cmp)
-{
-    auto cursor = head;
-
-    while (cursor) {
-        if (cmp(cursor, size)) {
-            return cursor;
-        }
-
-        cursor = cursor->next;
-    }
-
-    return nullptr;
-}
-
 template<typename _Node>
 _Node *free_list_insert_sorted_by_size(_Node *head,
                                        _Node *block)
@@ -458,7 +428,6 @@ void *mem_malloc(size_t size)
         if (size > 0) {
             size_t aligned_size = mem_block_aligned_size(size);
             auto memoryBlock = bin_find_free_block(aligned_size);
-            bool blockFromBin = memoryBlock;
 
             if (memoryBlock) {
                 block = memoryBlock;
