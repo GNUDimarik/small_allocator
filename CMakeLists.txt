@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Werror")
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fanalyzer")
-#set(ENABLE_TEST true)
+set(ENABLE_TEST true)
 
 if (DEFINED ENABLE_TEST)
     cmake_policy(SET CMP0135 NEW)
@@ -37,6 +37,7 @@ if (DEFINED ENABLE_TEST)
             GTest::gtest_main)
 
     include(GoogleTest)
+    target_compile_definitions(allocator_test PUBLIC __HAVE_STRING_H__ __HAVE_ERRNO_H__)
     gtest_discover_tests(allocator_test)
 endif ()
 
@@ -47,3 +48,4 @@ add_executable(${PROJECT_NAME} main.cpp
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR})
 #target_compile_definitions(${PROJECT_NAME} PUBLIC BINS_ARE_IN_HEAP)
+target_compile_definitions(${PROJECT_NAME} PUBLIC -D__HAVE_STRING_H__ -D__HAVE_ERRNO_H__)

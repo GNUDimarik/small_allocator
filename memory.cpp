@@ -511,7 +511,7 @@ int mem_initialize(void *base, size_t size)
             memset(gBinList, 0, binsSize);
             mem_block_pack(gMemStart, kOverheadSize, kBlockAllocated);
             mem_block_pack(gMemStart + kHeaderSize + kOverheadSize, kOverheadSize, kBlockAllocated);
-            size_t heapSize = size - (kOverheadSize * 5);
+            size_t heapSize = size - (kOverheadSize * 3);
             void *heap = mem_block_next(mem_block_user_ptr(gMemStart));
             mem_block_init_block(heap, heapSize, kBlockFree);
             gMemEnd = mem_block_char_ptr(mem_block_next(heap)) - kHeaderSize;
