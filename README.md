@@ -23,6 +23,8 @@ The allocator is based on **Donald Knuth's boundary tag method** and augmented w
 
 # Design Overview
 
+![Image alt](https://github.com/GNUDimarik/small_allocator/raw/main/diagram.png)
+
 The allocator manages memory using the **boundary tag algorithm** described by Donald Knuth.
 
 Each memory block contains:
