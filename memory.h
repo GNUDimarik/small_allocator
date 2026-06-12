@@ -27,6 +27,7 @@
 
 /* stddef.h Should be provided by an empty compiler if you built it for osdev */
 #include <stddef.h>
+#include <stdint.h>
 
 #if defined(__HAVE_ERRNO_H__)
 #include <errno.h>
@@ -83,18 +84,28 @@ static void *memmove(void *dest, const void *src, size_t length)
             __typeof__ (b) _b = (b); \
             _a < _b ? _a : _b;       \
         })
-#   endif
+#   endif /* ifndef min */
+
+#   ifndef max
+#       define max(a, b)             \
+        ({                           \
+            __typeof__ (a) _a = (a); \
+            __typeof__ (b) _b = (b); \
+            _a > _b ? _a : _b;       \
+        })
+#   endif /* ifndef min */
 #endif
 
 int mem_initialize(void *base, size_t size);
 void mem_unuinitialize();
 void *mem_malloc(size_t size);
+void *mem_malloc_aligned(size_t size, size_t alignment);
 void *mem_calloc(size_t num, size_t size);
 void *mem_realloc(void *p, size_t new_sz);
 void mem_free(void *ptr);
 [[maybe_unused]] void dump_mem();
 [[maybe_unused]] void dump_bins();
-[[maybe_unused]] bool mem_check_block(void *p);
+[[maybe_unused]] bool mem_block_check(void *p);
 [[maybe_unused]] bool mem_check(bool verbose = false);
 
 #endif //MEMORY_H

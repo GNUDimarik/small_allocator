@@ -153,6 +153,49 @@ TEST(MallocTest, EvenNotEvenFree)
     }
 }
 
+TEST(MallocTest, EvenNotEvenFreeAligned)
+{
+    int count = 1000;
+    std::vector<void *> pointers(count, nullptr);
+    std::vector<size_t> alignments(count, 0);
+
+    for (int i = 1; i < count; ++i) {
+        if ((i % 2) == 0) {
+            size_t alignment = 1ull << (3 + (i % 8)); // 8..1024
+            pointers[i] = mem_malloc_aligned(i, alignment);
+            alignments[i] = alignment;
+
+            ASSERT_NE(pointers[i], nullptr);
+            ASSERT_EQ(reinterpret_cast<uintptr_t>(pointers[i]) % alignment, 0u);
+        }
+        else {
+            pointers[i] = mem_malloc(i);
+            ASSERT_NE(pointers[i], nullptr);
+        }
+    }
+
+    for (int i = 1; i < count; ++i) {
+        if ((i % 2) == 0) {
+            mem_free(pointers[i]);
+            pointers[i] = nullptr;
+        }
+    }
+
+    for (int i = 1; i < count; ++i) {
+        if ((i % 2) == 0) {
+            size_t alignment = alignments[i];
+            pointers[i] = mem_malloc_aligned(i, alignment);
+
+            ASSERT_NE(pointers[i], nullptr);
+            ASSERT_EQ(reinterpret_cast<uintptr_t>(pointers[i]) % alignment, 0u);
+        }
+    }
+
+    for (int i = 1; i < count; ++i) {
+        mem_free(pointers[i]);
+    }
+}
+
 // ----------------------------------------------------------------------
 // Тесты для mem_calloc
 // ----------------------------------------------------------------------
@@ -384,6 +427,35 @@ TEST(CombinedTest, RepeatedAllocations)
     SUCCEED();
 }
 
+TEST(CombinedTest, RepeatedAlignedAllocations)
+{
+    for (int iter = 0; iter < 10000; ++iter) {
+        size_t alignment = 1ull << (3 + (iter % 8));
+
+        void *p1 = mem_malloc_aligned(rand() % 1024 + 1, alignment);
+
+        if (p1) {
+            ASSERT_EQ(reinterpret_cast<uintptr_t>(p1) % alignment, 0u);
+
+            void *p2 = mem_realloc(p1, rand() % 2048 + 1);
+
+            if (p2) {
+                void *p3 = mem_calloc(rand() % 100 + 1, 8);
+                if (p3) {
+                    mem_free(p3);
+                }
+
+                mem_free(p2);
+            }
+            else {
+                mem_free(p1);
+            }
+        }
+    }
+
+    SUCCEED();
+}
+
 // ----------------------------------------------------------------------
 // Тесты на выравнивание для всех функций
 // ----------------------------------------------------------------------
@@ -558,6 +630,22 @@ TEST(ReallocPatternTest, CallocThenReallocPreservesZerosAndData)
     mem_free(p2);
 }
 
+TEST(AlignedAllocation, VerifyAlignment)
+{
+    for (size_t align = 8; align <= 4096; align <<= 1) {
+        for (size_t size = 1; size < 1000; ++size) {
+            void* p = mem_malloc_aligned(size, align);
+
+            ASSERT_NE(p, nullptr);
+
+            ASSERT_EQ(
+                reinterpret_cast<uintptr_t>(p) % align,
+                0u);
+
+            mem_free(p);
+        }
+    }
+}
 
 int main(int argc, char **argv)
 {
