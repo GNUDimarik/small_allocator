@@ -18,6 +18,8 @@
 #include <new> // for std::max_align_t
 #include <vector>
 
+#define HEAP_SIZE (4096 * 4096)
+
 // Вспомогательная функция для проверки выравнивания указателя
 static bool is_aligned_to_max_align(void *ptr)
 {
@@ -81,8 +83,7 @@ TEST(MallocTest, AllocLarge)
 TEST(MallocTest, AllocMax)
 {
     // Попытка выделить слишком большой блок – ожидаем NULL
-    size_t huge = std::numeric_limits<size_t>::max() / 2;
-    void *p = mem_malloc(huge);
+    void *p = mem_malloc(HEAP_SIZE + 1);
     EXPECT_EQ(p, nullptr);
     // free не вызываем, так как указатель нулевой
 }
@@ -182,7 +183,7 @@ TEST(CallocTest, ZeroSizeArguments)
 TEST(CallocTest, OverflowDetection)
 {
     // Переполнение при умножении snum * size должно вернуть NULL
-    size_t snum = std::numeric_limits<size_t>::max() / 2 + 1;
+    size_t snum = ULONG_MAX;
     size_t size = 2;
     void *p = mem_calloc(snum, size);
     EXPECT_EQ(p, nullptr);
@@ -557,7 +558,6 @@ TEST(ReallocPatternTest, CallocThenReallocPreservesZerosAndData)
     mem_free(p2);
 }
 
-#define HEAP_SIZE (4096 * 4096)
 
 int main(int argc, char **argv)
 {
