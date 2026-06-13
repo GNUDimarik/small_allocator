@@ -1,470 +1,306 @@
-# Memory Allocator
+# DUX Small Allocator
 
-A lightweight dynamic memory allocator designed for operating systems, embedded systems, bootloaders, kernels, and other low-level environments where a dependency on a standard C library allocator is undesirable.
+Part of the DUX (Dmitry UNIX) operating system project.
 
-The allocator is based on **Donald Knuth's boundary tag method** and augmented with **256 segregated free-list bins** for fast allocation.
+A custom memory allocator designed for operating system development.
+
+The allocator combines several classic memory management techniques:
+
+* Segregated free lists (256 bins)
+* Boundary tags
+* Dual magic markers
+* Block splitting
+* Block coalescing
+* Aligned allocations
+
+The implementation is designed to remain simple enough for educational and OS development purposes while still providing good allocation performance and low fragmentation.
+
+---
+
+## Overview
+
+![DUX Small Allocator](docs/images/allocator-overview.png)
+
+---
 
 ## Features
 
-* Boundary-tag memory management
-* Constant-time block coalescing (`O(1)`)
-* 256 segregated free-list bins
-* Constant-time bin access (`O(1)`)
-* Doubly-linked free lists
-* First-fit allocation strategy inside bins
-* Sorted huge-block bin for reduced fragmentation
-* User-supplied memory region
-* No dependency on libc allocators
-* No dependency on floating-point operations
-* Suitable for kernel-space memory management
-* Suitable for OS development and embedded environments
+* O(1) bin lookup
+* Boundary tags for fast coalescing
+* 256 segregated bins
+* Large block bin sorted by size
+* Aligned allocation support
+* Block splitting
+* Block coalescing
+* GoogleTest test suite
+* Freestanding friendly
+* Suitable for kernels, bootloaders and low-level runtime libraries
 
 ---
 
-# Design Overview
+## Allocator Design
 
-![Image alt](https://github.com/GNUDimarik/small_allocator/raw/main/diagram.png)
-
-The allocator manages memory using the **boundary tag algorithm** described by Donald Knuth.
-
-Each memory block contains:
-
-* Header
-* User area
-* Footer
-
-Both the header and footer store identical metadata:
-
-* Block size
-* Allocation state
-
-This allows the allocator to locate both neighboring blocks in constant time.
-
-## Block Layout
-
-Allocated block:
-
-```text
-+-----------+--------------------------------------+-----------+
-| Header    |             User Payload             | Footer    |
-+-----------+--------------------------------------+-----------+
-```
-
-Header/Footer format:
-
-```text
-+-------------------------------------------------+
-| Size (all bits except LSB) | Allocated Flag     |
-+-------------------------------------------------+
-```
-
-The least significant bit stores the allocation state:
-
-```text
-0 = free
-1 = allocated
-```
-
----
-
-# Boundary Tags
-
-Because both ends of the block contain identical metadata, neighboring blocks can be located without maintaining an explicit list of all blocks.
-
-Finding the next block:
-
-```text
-next = current + current_size + overhead
-```
-
-Finding the previous block:
-
-```text
-previous_size = footer_before_current->size
-previous      = current - previous_size - overhead
-```
-
-Memory layout:
-
-```text
-+--------+-----------+--------+
-| BlockA |  BlockB   | BlockC |
-+--------+-----------+--------+
-```
-
-The allocator can move in either direction by reading only the boundary tags.
-
----
-
-# Block Coalescing
-
-Free block merging occurs during `mem_free()`.
-
-When a block is released, the allocator checks both adjacent blocks.
-
-```text
-Before:
-
-+--------+--------+--------+
-| Free   | Used   | Free   |
-+--------+--------+--------+
-
-           free()
-             |
-             v
-
-After:
-
-+--------------------------+
-|        One Free Block    |
-+--------------------------+
-```
-
-The merge operation runs in constant time because neighboring blocks are found directly through boundary tags.
-
-Implementation flow:
+The allocator organizes free memory blocks into an array of 256 bins.
 
 ```cpp
-static void *mem_block_erase_merge(void *block)
-{
-    auto current = mem_block_prev(block);
-
-    if (mem_block_is_free(current)) {
-        bin_erase(current);
-    }
-
-    current = mem_block_next(block);
-
-    if (mem_block_is_free(current)) {
-        bin_erase(current);
-    }
-
-    return mem_block_merge(block);
-}
+MemBlock* gBins[256];
 ```
 
-Adjacent free blocks are first removed from their bins and then merged into a single larger block.
+The bin index is computed directly from the block size:
 
-The resulting block is inserted back into the appropriate bin.
+```cpp
+index = min(size, 255);
+```
+
+This provides constant-time access to the corresponding free-list.
+
+### Small Bins
+
+Bins `0..254` contain blocks of a specific size.
+
+Insertion is performed at the front of the list.
+
+### Large Bin
+
+Bin `255` stores large blocks whose size is greater than or equal to 255 bytes.
+
+Blocks in this bin are kept sorted by size.
+
+This allows larger allocation requests to locate suitable blocks efficiently.
 
 ---
 
-# Free Block Lists
+## Memory Layout
 
-Free blocks are stored inside segregated bins.
-
-A free block overlays the beginning of its user area with a doubly-linked list node:
-
-```cpp
-struct ListHead
-{
-    ListHead *next;
-    ListHead *prev;
-};
-```
-
-Free block layout:
+### Allocated Block
 
 ```text
-+----------+------------+------------+------------------+----------+
-| Header   | prev ptr   | next ptr   | remaining space  | Footer   |
-+----------+------------+------------+------------------+----------+
++--------+--------+----------------------+--------+--------+
+| Header | Magic  |       Payload        | Magic  | Footer |
++--------+--------+----------------------+--------+--------+
 ```
 
-Allocated block layout:
+### Free Block
+
+Free blocks reuse their payload area to store free-list pointers.
 
 ```text
-+----------+--------------------------------------+----------+
-| Header   |             User Payload             | Footer   |
-+----------+--------------------------------------+----------+
++--------+--------+--------+--------+-----+--------+--------+
+| Header | Magic  | Prev   | Next   | ... | Magic  | Footer |
++--------+--------+--------+--------+-----+--------+--------+
 ```
 
-This approach avoids allocating separate metadata structures and keeps allocator overhead low.
+### Aligned Allocation Block
+
+```text
++--------+--------+----------+--------+------------------+--------+--------+
+| Header | Magic  | Padding  | Offset | Aligned Payload  | Magic  | Footer |
++--------+--------+----------+--------+------------------+--------+--------+
+```
+
+The offset value is stored immediately before the returned pointer and is used internally to recover the original allocation during deallocation.
+
+The amount of padding depends on the requested alignment.
 
 ---
 
-# Segregated Bins
+## Magic Values
 
-The allocator maintains an array of 256 bins:
-
-```cpp
-ListHead *gBinList[256];
-```
-
-The array is used intentionally because array indexing provides constant-time access:
+Each block contains two 64-bit magic values:
 
 ```text
-Bin lookup complexity = O(1)
+Header | Magic | Payload | Magic | Footer
 ```
 
-Given a block size:
+The allocator uses these values as part of its internal metadata validation during allocator operations.
+
+---
+
+## Boundary Tags
+
+Each block contains both a header and a footer.
+
+The header and footer store:
+
+* block size
+* allocation state
+
+This allows neighbouring blocks to be located in constant time without maintaining a global list of all blocks.
+
+### Why Boundary Tags?
+
+Without coalescing:
+
+```text
+[A][F][A][F][A][F]
+```
+
+memory gradually becomes fragmented.
+
+After coalescing:
+
+```text
+[A][      FREE      ][A]
+```
+
+larger allocations become possible again.
+
+---
+
+## Allocation Algorithm
+
+Allocation proceeds as follows:
+
+1. Compute the required block size.
+2. Add allocator metadata overhead.
+3. Select the appropriate bin.
+4. Search for a suitable free block.
+5. Split the block if necessary.
+6. Mark the block as allocated.
+7. Return the payload pointer.
+
+---
+
+## Deallocation Algorithm
+
+Deallocation proceeds as follows:
+
+1. Locate block metadata.
+2. Mark the block as free.
+3. Merge with the previous free block.
+4. Merge with the next free block.
+5. Insert the resulting block into the appropriate bin.
+
+---
+
+## Complexity
+
+| Operation        | Complexity   |
+| ---------------- | ------------ |
+| malloc()         | O(1) typical |
+| free()           | O(1)         |
+| coalescing       | O(1)         |
+| bin lookup       | O(1)         |
+| large-bin search | O(n)         |
+
+---
+
+## Aligned Allocations
+
+The allocator supports arbitrary power-of-two alignments.
 
 ```cpp
-index = mem_block_size(block);
+void* mem_malloc_aligned(size_t size,
+                         size_t alignment);
 ```
-
-Small blocks are mapped directly to a bin whose index equals the block size.
 
 Example:
 
-```text
-Size 16 bytes  -> bin[16]
-Size 32 bytes  -> bin[32]
-Size 64 bytes  -> bin[64]
-Size 128 bytes -> bin[128]
-```
-
-This allows immediate access to the corresponding free list without traversing unrelated size classes.
-
----
-
-# Huge Block Bin
-
-Blocks larger than or equal to 256 bytes are stored in a dedicated huge-block bin.
-
-```text
-size >= 256 -> bin[255]
-```
-
-Insertion logic:
-
 ```cpp
-template<typename _Node>
-_Node *bin_insert(_Node *block)
-{
-    size_t index = mem_block_size(block);
+void* ptr = mem_malloc_aligned(4096, 64);
 
-    if (index < 255) {
-        gBinList[index] = free_list_prepend(gBinList[index], block);
-    }
-    else {
-        gBinList[255] =
-            free_list_insert_sorted_by_size(
-                gBinList[255],
-                block);
-    }
-
-    return block;
-}
+assert(reinterpret_cast<uintptr_t>(ptr) % 64 == 0);
 ```
 
-Unlike the smaller bins, the huge bin is maintained in ascending size order:
+Typical use cases:
 
-```text
-bin[255]
-
-[256] -> [272] -> [320] -> [512] -> [4096] -> ...
-```
-
-Allocation request:
-
-```text
-Request: 300 bytes
-```
-
-Selection:
-
-```text
-[256] -> too small
-[272] -> too small
-[320] -> selected
-```
-
-This approximates a best-fit strategy and helps reduce external fragmentation.
+* SIMD buffers
+* DMA memory
+* page-aligned structures
+* kernel objects
 
 ---
 
-# Allocation
+## Testing
 
-Allocation flow:
+The allocator is covered by an extensive GoogleTest suite.
 
-```text
-Request
-   |
-   v
-Select bin
-   |
-   v
-Find suitable free block
-   |
-   v
-Remove block from bin
-   |
-   v
-Split if necessary
-   |
-   v
-Return pointer
-```
+### Covered Scenarios
 
-If a block is larger than required, it is split:
+* allocator initialization
+* malloc()
+* free()
+* calloc()
+* realloc()
+* aligned allocations
+* alignment verification
+* block splitting
+* block coalescing
+* repeated allocation/free cycles
+* fragmentation recovery
+* stress tests
 
-```text
-Before:
+### Stress Testing
 
-+-----------------------------+
-|         Free Block          |
-+-----------------------------+
+The allocator is continuously tested using large allocation patterns including:
 
-After:
-
-+------------+---------------+
-| Allocated  |     Free      |
-+------------+---------------+
-```
-
-The remainder is immediately inserted into the appropriate bin.
+* sequential allocations
+* alternating free patterns
+* random allocation sizes
+* realloc growth/shrink scenarios
+* aligned allocation stress tests
 
 ---
 
-# Initialization
+## Build
 
-The allocator operates entirely inside a caller-provided memory region.
+### Library
 
-Initialization:
+```bash
+mkdir build
+cd build
 
-```cpp
-int mem_initialize(void *base, size_t size);
+cmake ../
+cmake --build .
 ```
 
-The heap layout is:
+### Build with Tests
 
-```text
-+------------+------------------------------------------+------------+
-| Prologue   |              Main Heap                   | Epilogue   |
-+------------+------------------------------------------+------------+
+```bash
+mkdir build
+cd build
+
+cmake ../ -DENABLE_TEST=1
+cmake --build .
 ```
 
-The prologue and epilogue are special allocated blocks used as sentinels.
+### Run Tests
 
-They eliminate boundary checks during coalescing.
-
-Initial state:
-
-```text
-+------------+------------------------------+------------+
-| Prologue   |      One Large Free Block    | Epilogue   |
-+------------+------------------------------+------------+
-```
-
-The free block is inserted into the corresponding bin during initialization.
-
----
-
-# Bin Storage
-
-Depending on configuration, bins can be stored either:
-
-1. Inside allocator-managed memory
-
-```cpp
-#define BINS_ARE_IN_HEAP
-```
-
-or
-
-2. In static/global memory
-
-```cpp
-ListHead *gBinList[256];
-```
-
-This makes the allocator flexible enough for kernels, bootloaders, embedded firmware, and user-space applications.
-
----
-
-# Reallocation
-
-Reallocation is implemented as:
-
-1. Allocate a new block
-2. Copy existing data
-3. Free old block
-
-```cpp
-void *mem_realloc(void *p, size_t new_sz)
-{
-    if (!p) {
-        return mem_malloc(new_sz);
-    }
-
-    auto block = mem_malloc(new_sz);
-
-    if (block) {
-        memmove(
-            block,
-            p,
-            min(new_sz, mem_block_size(p))
-        );
-
-        mem_free(p);
-    }
-
-    return block;
-}
+```bash
+./allocator_test
 ```
 
 ---
 
-# Diagnostics
+## Constants
 
-The allocator provides integrity checking functions.
-
-Validate a single block:
-
-```cpp
-bool mem_check_block(void *p);
-```
-
-Validate the entire heap:
-
-```cpp
-bool mem_check(bool verbose);
-```
-
-Validation verifies:
-
-* Pointer alignment
-* Header/footer consistency
-* Heap traversal correctness
-
-Boundary-tag validation:
-
-```text
-Header == Footer
-```
-
-Any mismatch indicates memory corruption.
+| Constant           | Value    |
+| ------------------ | -------- |
+| Header Size        | 8 bytes  |
+| Magic Size         | 8 bytes  |
+| Footer Size        | 8 bytes  |
+| Bin Count          | 256      |
+| Large Bin Index    | 255      |
+| Minimum Block Size | 32 bytes |
 
 ---
 
-# Complexity
+## Design Goals
 
-| Operation                  | Complexity |
-| -------------------------- | ---------- |
-| Bin lookup                 | O(1)       |
-| Insert into small bin      | O(1)       |
-| Remove from bin            | O(1)       |
-| Neighbor discovery         | O(1)       |
-| Coalescing                 | O(1)       |
-| Allocation from huge bin   | O(n)       |
-| Allocation from small bins | O(1)       |
+The allocator was developed specifically for operating system projects and low-level software.
 
----
+Primary goals:
 
-# Intended Use Cases
+* simplicity
+* predictable behaviour
+* low overhead
+* fast allocation
+* educational value
 
-* Hobby operating systems
-* Production kernels
-* Bootloaders
-* Embedded systems
-* Bare-metal applications
-* Hypervisors
+It is particularly well suited for:
 
-## SAST Tools
-
-[PVS-Studio](https://pvs-studio.com/pvs-studio/?utm_source=website&utm_medium=github&utm_campaign=open_source) - static analyzer for C, C++, C#, and Java code.
-* Educational projects
-* Low-level runtime environments
-
-The allocator prioritizes simplicity, deterministic behavior, low metadata overhead, and ease of integration into operating-system development projects.
+* operating system kernels
+* bootloaders
+* embedded systems
+* runtime libraries
+* OS development projects
