@@ -40,9 +40,9 @@ char *gMemEnd{};
 
 static constexpr const size_t kPointerSize = sizeof(void *);
 
-static constexpr const size_t kHeaderSize = kPointerSize;
+static constexpr const size_t kHeaderSize = kPointerSize * 2;
 
-static constexpr const size_t kFooterSize = kPointerSize;
+static constexpr const size_t kFooterSize = kHeaderSize;
 
 static constexpr const size_t kOverheadSize = kHeaderSize + kFooterSize;
 
@@ -54,9 +54,17 @@ static constexpr const size_t kBinCount = 256;
 
 static constexpr const size_t kHugeBlockMinSize = 256;
 
-static constexpr size_t kHugeBinIndex = kBinCount - 1;
+static constexpr const size_t kHugeBinIndex = kBinCount - 1;
 
-static constexpr size_t kMaxMessageLen = 256;
+static constexpr const size_t kMaxMessageLen = 256;
+
+static constexpr const size_t kMagicNumber = 0x4455585F4D454D21ULL;
+
+static constexpr const size_t kMagicNumberSize = sizeof(size_t);
+
+static constexpr const size_t kMagicNumberOffset = sizeof(size_t);
+
+static constexpr const size_t kAlignment = kPointerSize;
 
 #ifdef BINS_ARE_IN_HEAP
 ListHead **gBinList;
@@ -65,6 +73,9 @@ ListHead **gBinList;
 ListHead *gBinList[kBinCount];
 
 #endif
+
+bool mem_block_check(void *p);
+static void mem_debug_block(void *b, const char *tag);
 
 /**
  * Memory block related stuff
@@ -127,12 +138,16 @@ static bool mem_block_is_free(void *p)
 
 static void mem_block_put_to_header(void *_p, size_t _sz, size_t state)
 {
-    mem_block_pack(mem_block_header(_p), _sz, state);
+    auto header = mem_block_header(_p);
+    mem_block_pack(header, _sz, state);
+    *mem_block_size_t_ptr(header + kMagicNumberSize) = kMagicNumber;
 }
 
 static void mem_block_put_to_footer(void *_p, size_t _sz, size_t state)
 {
-    mem_block_pack(mem_block_footer(_p), _sz, state);
+    auto footer = mem_block_footer(_p);
+    mem_block_pack(footer, _sz, state);
+    *mem_block_size_t_ptr(footer - kMagicNumberSize) = kMagicNumber;
 }
 
 static void *mem_block_next(void *_p)
@@ -140,8 +155,8 @@ static void *mem_block_next(void *_p)
     return mem_block_char_ptr(_p) + mem_block_size(_p) + kOverheadSize;
 }
 
-static inline void *mem_block_init_block(void *_p, size_t _sz,
-                                         size_t state)
+static inline void *mem_block_init(void *_p, size_t _sz,
+                                   size_t state)
 {
     mem_block_put_to_header(_p, _sz, state);
     mem_block_put_to_footer(_p, _sz, state);
@@ -159,6 +174,31 @@ static void *mem_block_prev(void *_p)
 static inline size_t mem_block_size_with_overhead(void *ptr)
 {
     return mem_block_size(ptr) + kOverheadSize;
+}
+
+static inline size_t *mem_block_get_magic_from_header(void *ptr)
+{
+    return mem_block_size_t_ptr(mem_block_header(ptr) + kMagicNumberSize);
+}
+// TODO: implement check using custom alignment
+static inline bool mem_block_check_block(void *ptr)
+{
+    if (*mem_block_get_magic_from_header(ptr) == kMagicNumber) {
+        if ((reinterpret_cast<size_t>(ptr) % kAlignment) == 0) {
+            if (*mem_block_header(ptr) == *mem_block_footer(ptr)) {
+                return true;
+            }
+            else {
+                ALOGE("Bad block. Header and footer are not the same");
+            }
+        }
+        return true;
+    }
+    else {
+        ALOGE("Bad magic number");
+    }
+
+    return false;
 }
 
 static inline ListHead *mem_block_list_head(void *ptr)
@@ -389,7 +429,7 @@ static void *mem_block_merge(void *ptr)
     return ptr;
 }
 
-static size_t mem_block_aligned_size(size_t size)
+static size_t mem_block_aligned_size(size_t size, size_t alignment = kAlignment)
 {
     size_t aligned_size = 0;
 
@@ -397,7 +437,7 @@ static size_t mem_block_aligned_size(size_t size)
         aligned_size = kOverheadSize;
     }
     else {
-        aligned_size = kOverheadSize * ((size + (kOverheadSize) + (kOverheadSize - 1)) / kOverheadSize);
+        aligned_size = alignment * ((size + (alignment) + (alignment - 1)) / alignment);
     }
 
     return aligned_size;
@@ -454,6 +494,48 @@ void *mem_malloc(size_t size)
     return block;
 }
 
+static size_t mem_aligned_mem_size(size_t size,
+                                   size_t align)
+{
+    return size
+        + max(sizeof(size_t), alignof(size_t))
+        + align - 1;
+}
+
+static void *mem_block_resolve_from_align(void *ptr)
+{
+    auto p = ptr;
+
+    if (!mem_block_check_block(ptr)) {
+        auto offset = *mem_block_get_magic_from_header(ptr);
+        p = mem_block_char_ptr(ptr) - offset;
+    }
+
+    return p;
+}
+
+void *mem_malloc_aligned(size_t size, size_t alignment)
+{
+    if (alignment >= kAlignment) {
+        size_t size_with_alignment = mem_aligned_mem_size(size, alignment);
+        void *ptr = mem_malloc(size_with_alignment);
+
+        if (ptr) {
+            auto address = reinterpret_cast<size_t>(ptr);
+            auto aligned_ptr =
+                reinterpret_cast<void *>(alignment
+                    * ((address + sizeof(size_t) /* offset */ + alignment - 1) / alignment));
+
+            if (aligned_ptr) {
+                mem_block_size_t_ptr(aligned_ptr)[-1] = mem_block_char_ptr(aligned_ptr) - mem_block_char_ptr(ptr);
+                return aligned_ptr;
+            }
+        }
+    }
+
+    return nullptr;
+}
+
 void *mem_calloc(size_t num, size_t size)
 {
     size_t count = size * num;
@@ -466,12 +548,13 @@ void *mem_calloc(size_t num, size_t size)
     return p;
 }
 
-void *mem_realloc(void *p, size_t new_sz)
+void *mem_realloc(void *ptr, size_t new_sz)
 {
-    if (!p) {
+    if (!ptr) {
         return mem_malloc(new_sz);
     }
 
+    void *p = mem_block_resolve_from_align(ptr);
     auto block = mem_malloc(new_sz);
 
     if (block) {
@@ -484,14 +567,20 @@ void *mem_realloc(void *p, size_t new_sz)
 
 void mem_free(void *ptr)
 {
-    if (ptr != nullptr && mem_block_is_allocated(ptr)) {
-        size_t size = mem_block_size(ptr);
-        mem_block_init_block(ptr, size, kBlockFree);
-        ptr = mem_block_erase_merge(ptr);
-        bin_insert(mem_block_list_head(ptr));
-    }
-    else {
-        ALOGE("%s(): Invalid pointer (%p)\n", __func__, ptr);
+    if (ptr) {
+        void *p = mem_block_resolve_from_align(ptr);
+
+        if (mem_block_check_block(p)) {
+            if (mem_block_is_allocated(p)) {
+                size_t size = mem_block_size(p);
+                mem_block_init(p, size, kBlockFree);
+                p = mem_block_erase_merge(p);
+                bin_insert(mem_block_list_head(p));
+            }
+        }
+        else {
+            ALOGE("%s(): Invalid pointer (%p)\n", __func__, ptr);
+        }
     }
 }
 
@@ -509,14 +598,12 @@ int mem_initialize(void *base, size_t size)
             ALOGD("gBinList %p binsSize %zu gMemStart %p", gBinList, binsSize, gMemStart);
 #endif
             memset(gBinList, 0, binsSize);
-            mem_block_pack(gMemStart, kOverheadSize, kBlockAllocated);
-            mem_block_pack(gMemStart + kHeaderSize + kOverheadSize, kOverheadSize, kBlockAllocated);
+            mem_block_init(mem_block_char_ptr(gMemStart) + kHeaderSize, kOverheadSize, kBlockAllocated);
             size_t heapSize = size - (kOverheadSize * 5);
             void *heap = mem_block_next(mem_block_user_ptr(gMemStart));
-            mem_block_init_block(heap, heapSize, kBlockFree);
+            mem_block_init(heap, heapSize, kBlockFree);
             gMemEnd = mem_block_char_ptr(mem_block_next(heap)) - kHeaderSize;
-            mem_block_pack(gMemEnd, kOverheadSize, kBlockAllocated);
-            mem_block_pack(gMemEnd + kOverheadSize + kHeaderSize, kOverheadSize, kBlockAllocated);
+            mem_block_init(mem_block_char_ptr(gMemEnd) + kHeaderSize, kOverheadSize, kBlockAllocated);
             auto firstBlock = mem_block_list_head(heap);
             bin_insert(firstBlock);
             return 0;
@@ -637,19 +724,21 @@ static char *mem_print_block_to_str(void *p, char *str)
     return str;
 }
 
-bool mem_check_block(void *p)
+static void mem_debug_block(void *b, const char *tag = "BLOCK_DBG")
+{
+    char buffer[kMaxMessageLen];
+    mem_print_block_to_str(b, buffer);
+    ALOGD("%s: %s", tag, buffer);
+}
+
+bool mem_block_check(void *p)
 {
     if (p) {
-        if ((reinterpret_cast<size_t>(p) % kPointerSize) == 0) {
-            if (*mem_block_header(p) == *mem_block_footer(p)) {
-                return true;
-            }
-            else {
-                ALOGE("Bad block. Header and footer are not the same");
-            }
+        if (mem_block_check_block(p)) {
+            return true;
         }
         else {
-            ALOGE("Bad block (%p). The address is not aligned by %zu", p, kPointerSize);
+            ALOGE("Bad block (%p). The address is not aligned by %zu", p, kAlignment);
         }
     }
     else {
@@ -669,7 +758,7 @@ bool mem_check(bool verbose)
             if (verbose) {
                 mem_print_block_to_str(cur_blk, buffer);
 
-                if (!mem_check_block(cur_blk)) {
+                if (!mem_block_check(cur_blk)) {
                     ALOGD("block %s BAD", buffer);
                     return false;
                 }
