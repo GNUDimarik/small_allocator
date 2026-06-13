@@ -1,6 +1,6 @@
 # DUX Small Allocator
 
-Part of the DUX (Dmitry UNIX) operating system project.
+Part of the DUX operating system project.
 
 A custom memory allocator designed for operating system development.
 
