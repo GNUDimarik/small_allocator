@@ -525,13 +525,8 @@ void *mem_malloc_aligned(size_t size, size_t alignment)
             auto aligned_ptr =
                 reinterpret_cast<void *>(alignment
                     * ((address + sizeof(size_t) /* offset */ + alignment - 1) / alignment));
-
-            if (aligned_ptr) {
-                mem_block_size_t_ptr(aligned_ptr)[-1] = mem_block_char_ptr(aligned_ptr) - mem_block_char_ptr(ptr);
-                return aligned_ptr;
-            }
-
-            mem_free(ptr);
+            mem_block_size_t_ptr(aligned_ptr)[-1] = mem_block_char_ptr(aligned_ptr) - mem_block_char_ptr(ptr);
+            return aligned_ptr;
         }
     }
 
