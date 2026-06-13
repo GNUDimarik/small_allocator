@@ -106,7 +106,7 @@ The amount of padding depends on the requested alignment.
 
 ## Magic Values
 
-Each block contains two 64-bit magic values:
+Each block contains two sizeof(size_t)-bit magic values:
 
 ```text
 Header | Magic | Payload | Magic | Footer
@@ -177,8 +177,8 @@ Deallocation proceeds as follows:
 
 | Operation        | Complexity   |
 | ---------------- | ------------ |
-| malloc()         | O(1) typical |
-| free()           | O(1)         |
+| mem_malloc()     | O(1) typical |
+| mem_free()       | O(1)         |
 | coalescing       | O(1)         |
 | bin lookup       | O(1)         |
 | large-bin search | O(n)         |
