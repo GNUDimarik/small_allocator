@@ -530,6 +530,8 @@ void *mem_malloc_aligned(size_t size, size_t alignment)
                 mem_block_size_t_ptr(aligned_ptr)[-1] = mem_block_char_ptr(aligned_ptr) - mem_block_char_ptr(ptr);
                 return aligned_ptr;
             }
+
+            mem_free(ptr);
         }
     }
 
