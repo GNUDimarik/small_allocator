@@ -535,6 +535,10 @@ void *mem_malloc_aligned(size_t size, size_t alignment)
 
 void *mem_calloc(size_t num, size_t size)
 {
+    if (size != 0 && num > SIZE_MAX / size) {
+        return nullptr;
+    }
+
     size_t count = size * num;
     void *p = mem_malloc(count);
 

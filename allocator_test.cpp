@@ -124,7 +124,7 @@ TEST(MallocTest, EvenNotEvenFree)
 {
     int count = 1000;
     std::vector<void *> pointers;
-    pointers.reserve(count);
+    pointers.resize(count);
 
     for (int i = 0; i < count; ++i) {
         pointers[i] = mem_malloc(i);
@@ -225,10 +225,9 @@ TEST(CallocTest, ZeroSizeArguments)
 
 TEST(CallocTest, OverflowDetection)
 {
-    // Переполнение при умножении snum * size должно вернуть NULL
-    size_t snum = ULONG_MAX;
-    size_t size = 2;
-    void *p = mem_calloc(snum, size);
+    size_t count = 2;
+    size_t size = SIZE_MAX / 2 + 1;
+    void *p = mem_calloc(count, size);
     EXPECT_EQ(p, nullptr);
 }
 
@@ -634,7 +633,7 @@ TEST(AlignedAllocation, VerifyAlignment)
 {
     for (size_t align = 8; align <= 4096; align <<= 1) {
         for (size_t size = 1; size < 1000; ++size) {
-            void* p = mem_malloc_aligned(size, align);
+            void *p = mem_malloc_aligned(size, align);
 
             ASSERT_NE(p, nullptr);
 

@@ -25,7 +25,7 @@ int main()
 {
     std::unique_ptr<char[]> heap(new char[HEAP_SIZE]);
     std::vector<char *> vptr;
-    vptr.reserve(ITEMS_NUMBER);
+    vptr.resize(ITEMS_NUMBER);
     auto p = heap.get();
     *p = 'a';
     mem_initialize(heap.get(), HEAP_SIZE);
@@ -54,7 +54,7 @@ int main()
         }
     }
 #endif
-    auto val_ptr = mem_malloc_aligned(1, 128);
+    auto val_ptr = mem_malloc_aligned(100, 128);
     size_t value = reinterpret_cast<size_t> (val_ptr);
     auto ptr = mem_malloc(1);
     mem_free(ptr);
