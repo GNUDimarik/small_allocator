@@ -194,9 +194,6 @@ static inline bool mem_block_check_block(void *ptr)
         }
         return true;
     }
-    else {
-        ALOGE("Bad magic number");
-    }
 
     return false;
 }
@@ -558,7 +555,7 @@ void *mem_realloc(void *ptr, size_t new_sz)
     void *p = mem_block_resolve_from_align(ptr);
     auto block = mem_malloc(new_sz);
 
-    if (block) {
+    if (block && mem_block_check_block(block)) {
         memmove(block, p, min(new_sz, mem_block_size(p)));
         mem_free(p);
     }
