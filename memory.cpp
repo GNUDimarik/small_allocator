@@ -28,6 +28,10 @@
 #include <string.h>
 #endif
 
+#if defined(__OSDEV_DUX_LIBSTDC__)
+#include <printf.h>
+#endif
+
 // #define LOG_NDEBUG 1
 #define LOG_TAG "memory"
 #include "logging.h"
