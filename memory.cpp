@@ -611,7 +611,11 @@ int mem_initialize(void *base, size_t size)
             gBinList = reinterpret_cast<ListHead **>(base);
             ALOGD("gBinList %p binsSize %zu gMemStart %p", gBinList, binsSize, gMemStart);
 #endif
+#if defined(__OSDEV_HAVE_STRING_H__)
             memset(gBinList, 0, binsSize);
+#else
+            __builtin_memset(gBinList, 0, binsSize);
+#endif
             mem_block_init(mem_block_char_ptr(gMemStart) + kHeaderSize, kOverheadSize, kBlockAllocated);
             size_t heapSize = size - (kOverheadSize * 5);
             void *heap = mem_block_next(mem_block_user_ptr(gMemStart));
