@@ -35,45 +35,6 @@
 #   define EINVAL 22
 #endif
 
-#if defined(__HAVE_STRING_H__)
-#include <string.h>
-#else
-static void *memset(void *dest, int value, size_t length)
-{
-    auto *p = static_cast<unsigned char *> (dest);
-
-    while (length-- > 0) {
-        *p++ = (unsigned char) value;
-    }
-
-    return dest;
-}
-
-static void *memmove(void *dest, const void *src, size_t length)
-{
-    auto *d = static_cast<unsigned char *> (dest);
-    auto *s = static_cast<const unsigned char *> (src);
-
-    if (s >= d) {
-        /* copy forward */
-        while (length-- > 0) {
-            *d++ = *s++;
-        }
-    }
-    else if (s <= d) {
-        /* copy backward */
-        d += length;
-        s += length;
-
-        while (length-- > 0) {
-            *--d = *--s;
-        }
-    }
-
-    return dest;
-}
-#endif
-
 #if defined(__HAVE_CONFIG_H__)
 #include <config.h>
 #else

@@ -24,6 +24,10 @@
 
 #include "memory.h"
 
+#if defined(__HAVE_STRING_H__)
+#include <string.h>
+#endif
+
 // #define LOG_NDEBUG 1
 #define LOG_TAG "memory"
 #include "logging.h"
@@ -544,7 +548,11 @@ void *mem_calloc(size_t num, size_t size)
     void *p = mem_malloc(count);
 
     if (p != nullptr) {
+#if defined(__HAVE_STRING_H__)
         memset(p, 0, count);
+#else
+        __builtin_memset(p, 0, count);
+#endif
     }
 
     return p;
@@ -560,7 +568,11 @@ void *mem_realloc(void *ptr, size_t new_sz)
     auto block = mem_malloc(new_sz);
 
     if (block && mem_block_check_block(block)) {
+#if defined(__HAVE_STRING_H__) && defined(__HAVE_CONFIG_H__)
         memmove(block, p, min(new_sz, mem_block_size(p)));
+#else
+        __builtin_memmove(block, p, min(new_sz, mem_block_size(p)));
+#endif
         mem_free(p);
     }
 
