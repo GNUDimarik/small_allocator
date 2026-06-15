@@ -62,8 +62,11 @@ static constexpr const size_t kHugeBinIndex = kBinCount - 1;
 
 static constexpr const size_t kMaxMessageLen = 256;
 
+#if __SIZEOF_POINTER__ == 8
 static constexpr const size_t kMagicNumber = 0x4455585F4D454D21ULL;
-
+#else
+static constexpr uint32_t kMagicNumber = 0x44555821U;
+#endif
 static constexpr const size_t kMagicNumberSize = sizeof(size_t);
 
 static constexpr const size_t kMagicNumberOffset = sizeof(size_t);

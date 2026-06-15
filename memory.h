@@ -35,8 +35,8 @@
 #   define EINVAL 22
 #endif
 
-#if defined(__OSDEV_HAVE_CONFIG_H__)
-#include <config.h>
+#if defined(__OSDEV_DUX_LIBSTDC__)
+#include <utils.h>
 #else
 #   ifndef min
 #       define min(a, b)             \
