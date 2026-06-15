@@ -480,11 +480,15 @@ void *mem_malloc(size_t size)
         }
         else {
             ALOGE("Could not allocate block with size %zu", size);
+#if defined(__HAVE_ERRNO_H__)
             errno = EINVAL;
+#endif
         }
     }
     else {
+#if defined(__HAVE_ERRNO_H__)
         errno = EINVAL;
+#endif
         ALOGE("Not initialized");
     }
 
@@ -722,6 +726,7 @@ static char *mem_print_block_to_str(void *p, char *str)
     return str;
 }
 
+[[maybe_unused]]
 static void mem_debug_block(void *b, const char *tag = "BLOCK_DBG")
 {
     char buffer[kMaxMessageLen];
