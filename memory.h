@@ -29,13 +29,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#if defined(__HAVE_ERRNO_H__)
+#if defined(__OSDEV_HAVE_ERRNO_H__)
 #include <errno.h>
 #else
 #   define EINVAL 22
 #endif
 
-#if defined(__HAVE_CONFIG_H__)
+#if defined(__OSDEV_HAVE_CONFIG_H__)
 #include <config.h>
 #else
 #   ifndef min

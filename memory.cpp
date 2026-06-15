@@ -24,7 +24,7 @@
 
 #include "memory.h"
 
-#if defined(__HAVE_STRING_H__)
+#if defined(__OSDEV_HAVE_STRING_H__)
 #include <string.h>
 #endif
 
@@ -484,13 +484,13 @@ void *mem_malloc(size_t size)
         }
         else {
             ALOGE("Could not allocate block with size %zu", size);
-#if defined(__HAVE_ERRNO_H__)
+#if defined(__OSDEV_HAVE_ERRNO_H__)
             errno = EINVAL;
 #endif
         }
     }
     else {
-#if defined(__HAVE_ERRNO_H__)
+#if defined(__OSDEV_HAVE_ERRNO_H__)
         errno = EINVAL;
 #endif
         ALOGE("Not initialized");
@@ -548,7 +548,7 @@ void *mem_calloc(size_t num, size_t size)
     void *p = mem_malloc(count);
 
     if (p != nullptr) {
-#if defined(__HAVE_STRING_H__)
+#if defined(__OSDEV_HAVE_STRING_H__)
         memset(p, 0, count);
 #else
         __builtin_memset(p, 0, count);
@@ -568,7 +568,7 @@ void *mem_realloc(void *ptr, size_t new_sz)
     auto block = mem_malloc(new_sz);
 
     if (block && mem_block_check_block(block)) {
-#if defined(__HAVE_STRING_H__) && defined(__HAVE_CONFIG_H__)
+#if defined(__OSDEV_HAVE_STRING_H__) && defined(__OSDEV_HAVE_CONFIG_H__)
         memmove(block, p, min(new_sz, mem_block_size(p)));
 #else
         __builtin_memmove(block, p, min(new_sz, mem_block_size(p)));
