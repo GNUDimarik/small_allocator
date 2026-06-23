@@ -191,7 +191,7 @@ static inline size_t *mem_block_get_magic_from_header(void *ptr)
 {
     return mem_block_size_t_ptr(mem_block_header(ptr) + kMagicNumberSize);
 }
-// TODO: implement check using custom alignment
+
 static inline bool mem_block_check_block(void *ptr)
 {
     if (*mem_block_get_magic_from_header(ptr) == kMagicNumber) {
@@ -203,7 +203,6 @@ static inline bool mem_block_check_block(void *ptr)
                 ALOGE("Bad block. Header and footer are not the same");
             }
         }
-        return true;
     }
 
     return false;
@@ -514,7 +513,7 @@ static size_t mem_aligned_mem_size(size_t size,
         + align - 1;
 }
 
-static void *mem_block_resolve_from_align(void *ptr)
+static void *mem_block_resolve_from_aligned(void *ptr)
 {
     auto p = ptr;
 
@@ -571,7 +570,7 @@ void *mem_realloc(void *ptr, size_t new_sz)
         return mem_malloc(new_sz);
     }
 
-    void *p = mem_block_resolve_from_align(ptr);
+    void *p = mem_block_resolve_from_aligned(ptr);
     auto block = mem_malloc(new_sz);
 
     if (block && mem_block_check_block(block)) {
@@ -589,7 +588,7 @@ void *mem_realloc(void *ptr, size_t new_sz)
 void mem_free(void *ptr)
 {
     if (ptr) {
-        void *p = mem_block_resolve_from_align(ptr);
+        void *p = mem_block_resolve_from_aligned(ptr);
 
         if (mem_block_check_block(p)) {
             if (mem_block_is_allocated(p)) {
