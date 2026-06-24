@@ -1,5 +1,7 @@
 # DUX Small Allocator
 
+![License](https://img.shields.io/badge/license-MIT-green)
+
 Part of the DUX operating system project.
 
 A custom memory allocator designed for operating system development.
