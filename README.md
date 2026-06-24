@@ -80,19 +80,11 @@ This allows larger allocation requests to locate suitable blocks efficiently.
 
 Free blocks reuse their payload area to store free-list pointers.
 
-```text
-+--------+--------+--------+--------+-----+--------+--------+
-| Header | Magic  | Prev   | Next   | ... | Magic  | Footer |
-+--------+--------+--------+--------+-----+--------+--------+
-```
+![DUX Small Allocator](docs/images/free-block-overview.png)
 
 ### Aligned Allocation Block
 
-```text
-+--------+--------+----------+--------+------------------+--------+--------+
-| Header | Magic  | Padding  | Offset | Aligned Payload  | Magic  | Footer |
-+--------+--------+----------+--------+------------------+--------+--------+
-```
+![DUX Small Allocator](docs/images/aligned-block-overview.png)
 
 The offset value is stored immediately before the returned pointer and is used internally to recover the original allocation during deallocation.
 
