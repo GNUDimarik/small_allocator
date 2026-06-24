@@ -72,13 +72,9 @@ This allows larger allocation requests to locate suitable blocks efficiently.
 
 ## Memory Layout
 
-### Allocated Block
+### Block
 
-```text
-+--------+--------+----------------------+--------+--------+
-| Header | Magic  |       Payload        | Magic  | Footer |
-+--------+--------+----------------------+--------+--------+
-```
+![DUX Small Allocator](docs/images/block-overview.png)
 
 ### Free Block
 
