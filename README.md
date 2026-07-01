@@ -1,6 +1,8 @@
 # DUX Small Allocator
 
 ![License](https://img.shields.io/badge/license-MIT-green)
+![Compiler](https://img.shields.io/badge/GCC-16.1+-blue)
+![Platform](https://img.shields.io/badge/platform-freestanding-orange)
 
 Part of the DUX operating system project.
 
@@ -298,3 +300,9 @@ It is particularly well suited for:
 ## SAST Tools
 
 [PVS-Studio](https://pvs-studio.com/pvs-studio/?utm_source=website&utm_medium=github&utm_campaign=open_source) - static analyzer for C, C++, C#, and Java code.
+
+# License
+
+MIT License
+
+Copyright (c) 2026 Dmitry Adzhiev
