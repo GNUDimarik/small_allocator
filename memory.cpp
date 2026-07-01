@@ -527,7 +527,7 @@ static void *mem_block_resolve_from_aligned(void *ptr)
 
 void *mem_malloc_aligned(size_t size, size_t alignment)
 {
-    if (alignment >= kAlignment) {
+    if (alignment > kAlignment) {
         size_t size_with_alignment = mem_aligned_mem_size(size, alignment);
         void *ptr = mem_malloc(size_with_alignment);
 
@@ -541,7 +541,7 @@ void *mem_malloc_aligned(size_t size, size_t alignment)
         }
     }
 
-    return nullptr;
+    return mem_malloc(size);
 }
 
 void *mem_calloc(size_t num, size_t size)
