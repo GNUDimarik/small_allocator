@@ -648,9 +648,9 @@ TEST(AlignedAllocation, VerifyAlignment)
 
 TEST(AlignedAllocation, VerifyStandardAlignment)
 {
-    size_t standardAlignment = 16;
+    size_t standardAlignment = __SIZEOF_POINTER__ * 2;
 
-    for (size_t align = 0; align <= 16; ++ align) {
+    for (size_t align = 0; align <= standardAlignment; ++ align) {
         void *p = mem_malloc_aligned(align + 1, align);
         ASSERT_NE(p, nullptr);
 
