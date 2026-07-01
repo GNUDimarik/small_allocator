@@ -646,6 +646,21 @@ TEST(AlignedAllocation, VerifyAlignment)
     }
 }
 
+TEST(AlignedAllocation, VerifyStandardAlignment)
+{
+    size_t standardAlignment = 16;
+
+    for (size_t align = 0; align <= 16; ++ align) {
+        void *p = mem_malloc_aligned(align + 1, align);
+        ASSERT_NE(p, nullptr);
+
+        ASSERT_EQ(
+            reinterpret_cast<uintptr_t>(p) % standardAlignment,
+            0u);
+        mem_free(p);
+    }
+}
+
 int main(int argc, char **argv)
 {
     std::unique_ptr<char[]> heap(new char[HEAP_SIZE]);

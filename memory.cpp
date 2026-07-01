@@ -75,7 +75,7 @@ static constexpr const size_t kMagicNumberSize = sizeof(size_t);
 
 static constexpr const size_t kMagicNumberOffset = sizeof(size_t);
 
-static constexpr const size_t kAlignment = kPointerSize;
+static constexpr const size_t kAlignment = kOverheadSize;
 
 #ifdef BINS_ARE_IN_HEAP
 ListHead **gBinList;
