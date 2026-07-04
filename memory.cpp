@@ -486,10 +486,15 @@ void *mem_malloc(size_t size)
                     auto nextBlock = mem_block_list_head(next);
                     bin_insert(nextBlock);
                 }
+            } else {
+                ALOGE("No available memory for block with size %zu", size);
+#if defined(__OSDEV_HAVE_ERRNO_H__)
+                errno = ENOMEM;
+#endif
             }
         }
         else {
-            ALOGE("Could not allocate block with size %zu", size);
+            ALOGE("Could not allocate block with size 0");
 #if defined(__OSDEV_HAVE_ERRNO_H__)
             errno = EINVAL;
 #endif
