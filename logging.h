@@ -26,7 +26,7 @@
 #define LOGGING_H
 
 #if !LOG_NDEBUG
-#   if !(defined __OSDEV_FREESTANDING)
+#   if !(defined __OSDEV_FREESTANDING__)
 #       ifndef __ANDROID__
 #           include <stdio.h>
 #               define ALOGD(__ARGS__...)    \
@@ -44,7 +44,7 @@
                     fflush(stderr); \
             }
 #       endif /* __linux__ */
-#else
+#   else
 #       define ALOGD(...)
 #       define ALOGE(...)
 #   endif /* __FREESTANDING__ */
