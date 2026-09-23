@@ -49,6 +49,25 @@
 #       define ALOGD(...) dux::kernel::printk(LOG_TAG, __VA_ARGS__);
 #       define ALOGE(...) dux::kernel::printk(LOG_TAG, __VA_ARGS__);
 #   endif /* __FREESTANDING__ */
+#else
+#   define ALOGD(...)
+#   define ALOGE(...)
 #endif /* LOG_NDEBUG */
+
+#   if !(defined __OSDEV_FREESTANDING__)
+#       ifndef __ANDROID__
+#           include <stdio.h>
+#               define PRINT(__ARGS__...)    \
+                {                           \
+                    fprintf(stdout, "%s:\t", LOG_TAG); \
+                    fprintf(stdout, __ARGS__);         \
+                    fprintf(stdout, "\n");             \
+                    fflush(stdout); \
+                }
+#       endif /* __linux__ */
+#   else
+#       include <dux/kernel/printk.h>
+#       define PRINT(...) dux::kernel::printk(LOG_TAG, __VA_ARGS__);
+#   endif /* __FREESTANDING__ */
 
 #endif //LOGGING_H

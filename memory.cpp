@@ -32,7 +32,7 @@
 #include <printf.h>
 #endif
 
-// #define LOG_NDEBUG 1
+#define LOG_NDEBUG 1
 #define LOG_TAG "memory"
 #include "logging.h"
 
@@ -665,7 +665,7 @@ void dump_mem()
     size_t total_free_blocks = 0;
     size_t total_allocated_blocks = 0;
 
-    ALOGD(
+    PRINT(
         "*************************MEMORY DUMP*************************");
 
     if (gMemStart != nullptr && gMemEnd != nullptr) {
@@ -679,7 +679,7 @@ void dump_mem()
                                  ? "service block address %p size %12lu \t size with overhead %8lu state %s"
                                  : "block address         %p size %12lu \t size with overhead %8lu state %s";
 
-            ALOGD(format, cur_blk,
+            PRINT(format, cur_blk,
                   blk_size, blk_size_with_overhead,
                   is_allocated ? "allocated" : "free");
 
@@ -694,17 +694,17 @@ void dump_mem()
         }
     }
     else {
-        ALOGD("Not initialized");
+        PRINT("Not initialized");
     }
 
-    ALOGD(
+    PRINT(
         "**********************END OF MEMORY DUMP**********************");
 
-    ALOGD("total memory               %12zu bytes", total_memory);
-    ALOGD("total memory with overhead %12zu bytes", total_with_overhead);
-    ALOGD("total total_blocks count   %12zu", total_blocks);
-    ALOGD("total allocated blocks     %12zu", total_allocated_blocks);
-    ALOGD("total free blocks          %12zu", total_free_blocks);
+    PRINT("total memory               %12zu bytes", total_memory);
+    PRINT("total memory with overhead %12zu bytes", total_with_overhead);
+    PRINT("total total_blocks count   %12zu", total_blocks);
+    PRINT("total allocated blocks     %12zu", total_allocated_blocks);
+    PRINT("total free blocks          %12zu", total_free_blocks);
 }
 
 static size_t dump_list(ListHead *list, size_t index = 0)
@@ -714,7 +714,7 @@ static size_t dump_list(ListHead *list, size_t index = 0)
 
     while (ptr) {
         ++count;
-        void *block = ptr;
+        [[maybe_unused]] void *block = ptr;
         ALOGD("block %p size %zu size with overhead %zu mem bin[%zu] prev addr %p next addr %p",
               block,
               mem_block_size(block),
@@ -727,7 +727,7 @@ static size_t dump_list(ListHead *list, size_t index = 0)
 
 void dump_bins()
 {
-    size_t count = 0;
+    [[maybe_unused]] size_t count = 0;
 
     for (size_t index = 0; index < kBinCount; ++index) {
         if (gBinList[index]) {
