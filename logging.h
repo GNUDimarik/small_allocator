@@ -45,8 +45,9 @@
             }
 #       endif /* __linux__ */
 #   else
-#       define ALOGD(...)
-#       define ALOGE(...)
+#       include <dux/kernel/printk.h>
+#       define ALOGD(...) dux::kernel::printk(LOG_TAG, __VA_ARGS__);
+#       define ALOGE(...) dux::kernel::printk(LOG_TAG, __VA_ARGS__);
 #   endif /* __FREESTANDING__ */
 #endif /* LOG_NDEBUG */
 
