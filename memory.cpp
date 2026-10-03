@@ -28,7 +28,7 @@
 #include <printf.h>
 #include <errno.h>
 
-// #define LOG_NDEBUG 1
+#define LOG_NDEBUG 1
 #define LOG_TAG "memory"
 #include "logging.h"
 

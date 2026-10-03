@@ -67,7 +67,12 @@
 #       endif /* __linux__ */
 #   else
 #       include <dux/kernel/printk.h>
-#       define PRINT(...) dux::kernel::printk(LOG_TAG, __VA_ARGS__);
+#       define PRINT(...)                         \
+               do {                                   \
+                   dux::kernel::printk(LOG_TAG ": ");  \
+                   dux::kernel::printk(__VA_ARGS__);  \
+                   dux::kernel::printk("\n");         \
+               } while (0)
 #   endif /* __FREESTANDING__ */
 
 #endif //LOGGING_H
