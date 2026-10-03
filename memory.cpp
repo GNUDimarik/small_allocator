@@ -28,7 +28,7 @@
 #include <printf.h>
 #include <errno.h>
 
-#define LOG_NDEBUG 1
+// #define LOG_NDEBUG 1
 #define LOG_TAG "memory"
 #include "logging.h"
 
@@ -645,12 +645,12 @@ void mem_dump()
             total_with_overhead += blk_size_with_overhead;
             auto is_allocated = mem_block_is_allocated(cur_blk);
             const char *format = cur_blk == mem_block_user_ptr(gMemStart) || cur_blk == mem_block_user_ptr(gMemEnd)
-                                 ? "service block address %p size %12lu \t size with overhead %8lu state %s"
-                                 : "block address         %p size %12lu \t size with overhead %8lu state %s";
+                                 ? "srv blk %p size %lu total %lu state %s"
+                                 : "blk %p size %lu total %lu state %s";
 
             PRINT(format, cur_blk,
                   blk_size, blk_size_with_overhead,
-                  is_allocated ? "allocated" : "free");
+                  is_allocated ? "a" : "f");
 
             if (is_allocated) {
                 ++total_allocated_blocks;
