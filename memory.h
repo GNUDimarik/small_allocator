@@ -64,8 +64,8 @@ void *mem_malloc_aligned(size_t size, size_t alignment);
 void *mem_calloc(size_t num, size_t size);
 void *mem_realloc(void *p, size_t new_sz);
 void mem_free(void *ptr);
-[[maybe_unused]] void dump_mem();
-[[maybe_unused]] void dump_bins();
+[[maybe_unused]] void mem_dump();
+[[maybe_unused]] void mem_dump_bins();
 [[maybe_unused]] bool mem_block_check(void *p);
 [[maybe_unused]] bool mem_check(bool verbose = false);
 

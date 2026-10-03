@@ -29,8 +29,8 @@ int main()
     auto p = heap.get();
     *p = 'a';
     mem_initialize(heap.get(), HEAP_SIZE);
-    dump_mem();
-    dump_bins();
+    mem_dump();
+    mem_dump_bins();
 #if 1
     for (int i = 1; i < ITEMS_NUMBER; ++i) {
         vptr[i] = char_alloc(i);
@@ -44,8 +44,8 @@ int main()
         }
     }
 
-    dump_mem();
-    dump_bins();
+    mem_dump();
+    mem_dump_bins();
     mem_check(true);
 
     for (int i = 0; i < ITEMS_NUMBER; ++i) {
@@ -59,8 +59,8 @@ int main()
     auto ptr = mem_malloc(1);
     mem_free(ptr);
     mem_free(val_ptr);
-    dump_mem();
-    dump_bins();
+    mem_dump();
+    mem_dump_bins();
     mem_check(true);
     std::cout << "value % 128 " << value % 128 << std::endl;
     return 0;

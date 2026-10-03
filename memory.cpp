@@ -24,15 +24,11 @@
 
 #include "memory.h"
 
-#if defined(__OSDEV_HAVE_STRING_H__)
 #include <string.h>
-#endif
-
-#if defined(__OSDEV_DUX_LIBSTDC__)
 #include <printf.h>
-#endif
+#include <errno.h>
 
-#define LOG_NDEBUG 1
+// #define LOG_NDEBUG 1
 #define LOG_TAG "memory"
 #include "logging.h"
 
@@ -77,13 +73,7 @@ static constexpr const size_t kMagicNumberOffset = sizeof(size_t);
 
 static constexpr const size_t kAlignment = kHeaderSize;
 
-#ifdef BINS_ARE_IN_HEAP
 ListHead **gBinList;
-#else
-
-ListHead *gBinList[kBinCount];
-
-#endif
 
 bool mem_block_check(void *p);
 static void mem_debug_block(void *b, const char *tag);
@@ -488,23 +478,16 @@ void *mem_malloc(size_t size)
                 }
             } else {
                 ALOGE("No available memory for block with size %zu", size);
-#if defined(__OSDEV_HAVE_ERRNO_H__)
                 errno = ENOMEM;
-#endif
             }
         }
         else {
             ALOGE("Could not allocate block with size 0");
-#if defined(__OSDEV_HAVE_ERRNO_H__)
             errno = EINVAL;
-#endif
         }
     }
     else {
-#if defined(__OSDEV_HAVE_ERRNO_H__)
         errno = EINVAL;
-#endif
-        ALOGE("Not initialized");
     }
 
     return block;
@@ -559,11 +542,7 @@ void *mem_calloc(size_t num, size_t size)
     void *p = mem_malloc(count);
 
     if (p != nullptr) {
-#if defined(__OSDEV_HAVE_STRING_H__)
         memset(p, 0, count);
-#else
-        __builtin_memset(p, 0, count);
-#endif
     }
 
     return p;
@@ -579,11 +558,7 @@ void *mem_realloc(void *ptr, size_t new_sz)
     auto block = mem_malloc(new_sz);
 
     if (block && mem_block_check_block(block)) {
-#if defined(__OSDEV_HAVE_STRING_H__) && defined(__OSDEV_HAVE_CONFIG_H__)
         memmove(block, p, min(new_sz, mem_block_size(p)));
-#else
-        __builtin_memmove(block, p, min(new_sz, mem_block_size(p)));
-#endif
         mem_free(p);
     }
 
@@ -616,17 +591,11 @@ int mem_initialize(void *base, size_t size)
 
         if (size > binsSize) {
             gMemStart = mem_block_char_ptr(base);
-#if BINS_ARE_IN_HEAP
             gMemStart = mem_block_char_ptr(base) + binsSize;
             size -= binsSize;
             gBinList = reinterpret_cast<ListHead **>(base);
             ALOGD("gBinList %p binsSize %zu gMemStart %p", gBinList, binsSize, gMemStart);
-#endif
-#if defined(__OSDEV_HAVE_STRING_H__)
             memset(gBinList, 0, binsSize);
-#else
-            __builtin_memset(gBinList, 0, binsSize);
-#endif
             mem_block_init(mem_block_char_ptr(gMemStart) + kHeaderSize, kOverheadSize, kBlockAllocated);
             size_t heapSize = size - (kOverheadSize * 5);
             void *heap = mem_block_next(mem_block_user_ptr(gMemStart));
@@ -656,7 +625,7 @@ void mem_unuinitialize()
     gMemEnd = nullptr;
 }
 
-void dump_mem()
+void mem_dump()
 {
     void *cur_blk = nullptr;
     size_t total_memory = 0;
@@ -715,7 +684,7 @@ static size_t dump_list(ListHead *list, size_t index = 0)
     while (ptr) {
         ++count;
         [[maybe_unused]] void *block = ptr;
-        ALOGD("block %p size %zu size with overhead %zu mem bin[%zu] prev addr %p next addr %p",
+        PRINT("block %p size %zu size with overhead %zu mem bin[%zu] prev addr %p next addr %p",
               block,
               mem_block_size(block),
               mem_block_size_with_overhead(block), index, ptr->prev, ptr->next);
@@ -725,7 +694,7 @@ static size_t dump_list(ListHead *list, size_t index = 0)
     return count;
 }
 
-void dump_bins()
+void mem_dump_bins()
 {
     [[maybe_unused]] size_t count = 0;
 
@@ -735,7 +704,7 @@ void dump_bins()
         }
     }
 
-    ALOGD("Total free blocks in all bins %zu", count);
+    PRINT("Total free blocks in all bins %zu", count);
 }
 
 static char *mem_print_block_to_str(void *p, char *str)
